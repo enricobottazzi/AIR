@@ -24,6 +24,7 @@ Your response should be exactly a short phrase that explains the behavior of the
 Explain the neuron above with a word or phrase, not a complete sentence.
 """
 
+### TODO: rename into pre-process
 def explain_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[str], list[float]]:
     # `window` is an inclusive (start, end) range of token offsets relative to
     # maxValueTokenIndex: negative = preceding, 0 = the max token, positive = following.

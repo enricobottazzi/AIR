@@ -20,11 +20,14 @@ def fetch_feature(layer: int, index: int) -> dict:
         return json.load(r)
 
 
+N_FEATURES = 50
+
 if __name__ == "__main__":
-    layer = random.randint(0, 61)
-    index = random.randint(0, 262143)
-    feature = fetch_feature(layer, index)
-    out = Path("data") / f"{MODEL_ID}_{layer}_{index}.json"
-    out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps(feature, indent=2))
-    print(f"Saved {out}")
+    for _ in range(N_FEATURES):
+        layer = random.randint(0, 61)
+        index = random.randint(0, 262143)
+        feature = fetch_feature(layer, index)
+        out = Path("data") / f"{MODEL_ID}_{layer}_{index}.json"
+        out.parent.mkdir(exist_ok=True)
+        out.write_text(json.dumps(feature, indent=2))
+        print(f"Saved {out}")

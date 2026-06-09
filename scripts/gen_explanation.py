@@ -36,98 +36,92 @@ API_KEY = next(
 )
 
 setup = ExplainerSetup(model="google/gemini-2.5-flash-lite")
-model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+feature = json.loads(Path("data/gemma-3-27b-it_11_59359.json").read_text())
+# neg_feature = json.loads(Path("data/gemma-3-27b-it_6_4349.json").read_text())
 
-feature = json.loads(Path("data/gemma-3-27b-it_33_142228.json").read_text())
-neg_feature = json.loads(Path("data/gemma-3-27b-it_6_4349.json").read_text())
+# (label, prompt, examples, weights) per channel
+CHANNELS = [
+    ("input",          *explain_acts(feature, window=(0, 0))),
+    ("positive logits", *explain_logits(feature, positive=True)),
+    ("negative logits", *explain_logits(feature, positive=False)),
+    ("output",         *explain_acts(feature, window=(1, 1))),
+    ("short window",   *explain_acts(feature, window=(-1, 1))),
+    ("medium window",  *explain_acts(feature, window=(-10, 10))),
+    ("long window",    *explain_acts(feature, window=(-25, 25))),
+]
 
-# input
-prompt_1, examples_1, weights_1 = explain_acts(feature, window=(0, 0))
+results = [
+    (label, gen_correlation_score(embed(examples, model), w=weights), complete(setup, prompt, API_KEY).strip())
+    for label, prompt, examples, weights in CHANNELS
+]
 
-# positive logits
-prompt_2, examples_2, weights_2 = explain_logits(feature, positive=True)
-
-# negative logits
-prompt_3, examples_3, weights_3 = explain_logits(feature, positive=False)
-
-# output
-prompt_4, examples_4, weights_4 = explain_acts(feature, window=(1, 1))
-
-# cross
-prompt_5, examples_5, weights_5 = explain_acts(feature, window=(-25, 25))
-
-# compute correlation scores
-correlation_score_1 = gen_correlation_score(embed(examples_1, model), w=weights_1)
-correlation_score_2 = gen_correlation_score(embed(examples_2, model), w=weights_2)
-correlation_score_3 = gen_correlation_score(embed(examples_3, model), w=weights_3)
-correlation_score_4 = gen_correlation_score(embed(examples_4, model), w=weights_4)
-correlation_score_5 = gen_correlation_score(embed(examples_5, model), w=weights_5)
-
-print(correlation_score_1)
-print(correlation_score_2)
-print(correlation_score_3)
-print(correlation_score_4)
-print(correlation_score_5)
+# print results in a structured format
+w = max(len(label) for label, *_ in results)
+print(f"{'channel':<{w}}  {'corr':>6}  explanation")
+print("-" * (w + 40))
+for label, corr, explanation in results:
+    print(f"{label:<{w}}  {corr:>6.4f}  {explanation}")
 
 
-def load_record(explanation: str) -> LatentRecord:
-    examples = [
-        ActivatingExample(
-            tokens=torch.zeros(len(a["values"]), dtype=torch.long),
-            activations=torch.tensor(a["values"], dtype=torch.float32),
-            str_tokens=a["tokens"],
-        )
-        for a in feature["activations"]
-    ]
-    examples.sort(key=lambda e: e.max_activation, reverse=True)
-    record = LatentRecord(latent=Latent(feature["layer"], int(feature["index"])))
-    record.test = examples
-    record.not_active = [
-        NonActivatingExample(
-            tokens=torch.zeros(len(a["values"]), dtype=torch.long),
-            activations=torch.tensor(a["values"], dtype=torch.float32),
-            str_tokens=a["tokens"],
-            distance=-1.0,
-        )
-        for a in neg_feature["activations"]
-    ]
-    record.explanation = explanation
-    return record
+# def load_record(explanation: str) -> LatentRecord:
+#     examples = [
+#         ActivatingExample(
+#             tokens=torch.zeros(len(a["values"]), dtype=torch.long),
+#             activations=torch.tensor(a["values"], dtype=torch.float32),
+#             str_tokens=a["tokens"],
+#         )
+#         for a in feature["activations"]
+#     ]
+#     examples.sort(key=lambda e: e.max_activation, reverse=True)
+#     record = LatentRecord(latent=Latent(feature["layer"], int(feature["index"])))
+#     record.test = examples
+#     record.not_active = [
+#         NonActivatingExample(
+#             tokens=torch.zeros(len(a["values"]), dtype=torch.long),
+#             activations=torch.tensor(a["values"], dtype=torch.float32),
+#             str_tokens=a["tokens"],
+#             distance=-1.0,
+#         )
+#         for a in neg_feature["activations"]
+#     ]
+#     record.explanation = explanation
+#     return record
 
 
-def recall(score) -> float:
-    correct = [s.correct for s in score if s.correct is not None]
-    return sum(correct) / len(correct) if correct else 0.0
+# def recall(score) -> float:
+#     correct = [s.correct for s in score if s.correct is not None]
+#     return sum(correct) / len(correct) if correct else 0.0
 
 
-def emb_summary(score) -> dict:
-    pos = [s.similarity for s in score if s.distance >= 0]
-    neg = [s.similarity for s in score if s.distance < 0]
-    p, n = sum(pos) / max(len(pos), 1), sum(neg) / max(len(neg), 1)
-    return {"mean_pos": p, "mean_neg": n, "gap": p - n}
+# def emb_summary(score) -> dict:
+#     pos = [s.similarity for s in score if s.distance >= 0]
+#     neg = [s.similarity for s in score if s.distance < 0]
+#     p, n = sum(pos) / max(len(pos), 1), sum(neg) / max(len(neg), 1)
+#     return {"mean_pos": p, "mean_neg": n, "gap": p - n}
 
 
-async def score():
-    explanation = complete(setup, prompt_5, API_KEY).strip()
-    record = load_record(explanation)
-    client = OpenRouter("google/gemini-2.5-flash-lite", api_key=API_KEY)
+# async def score():
+#     explanation = complete(setup, prompt_5, API_KEY).strip()
+#     record = load_record(explanation)
+#     client = OpenRouter("google/gemini-2.5-flash-lite", api_key=API_KEY)
 
-    # fuzz = await FuzzingScorer(client, fuzz_type="active")(record)
-    detect = await DetectionScorer(client)(record)
-    embed_score = await EmbeddingScorer(model)(record)
+#     # fuzz = await FuzzingScorer(client, fuzz_type="active")(record)
+#     detect = await DetectionScorer(client)(record)
+#     embed_score = await EmbeddingScorer(model)(record)
 
-    for s in detect.score:
-        print(s.activating, s.prediction, s.correct)
+#     for s in detect.score:
+#         print(s.activating, s.prediction, s.correct)
 
-    out = {
-        "explanation": explanation,
-        # "fuzz_recall": recall(fuzz.score),
-        "detection_recall": recall(detect.score),
-        "embedding_similarity": emb_summary(embed_score.score),
-    }
-    Path("data/scores.json").write_text(json.dumps(out, indent=2))
-    print(out)
+#     out = {
+#         "explanation": explanation,
+#         # "fuzz_recall": recall(fuzz.score),
+#         "detection_recall": recall(detect.score),
+#         "embedding_similarity": emb_summary(embed_score.score),
+#     }
+#     Path("data/scores.json").write_text(json.dumps(out, indent=2))
+#     print(out)
 
 
-if __name__ == "__main__":
-    asyncio.run(score())
+# if __name__ == "__main__":
+#     asyncio.run(score())
