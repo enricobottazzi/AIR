@@ -1,20 +1,14 @@
 from src import prompts
 
-def explain_input_feature(feature: dict, window_size: int = 1) -> str:
+def explain_feature(feature: dict, window: tuple[int, int]) -> str:
+    # `window` is an inclusive (start, end) range of token offsets relative to
+    # maxValueTokenIndex: negative = preceding, 0 = the max token, positive = following.
+    # e.g. (0, 0) is only the top activating token.
+    start, end = window
+    assert start <= end, "window start must be <= end"
     examples = []
     for act in feature["activations"]:
         i = act["maxValueTokenIndex"]
-        window = act["tokens"][max(0, i - window_size + 1): i + 1]
-        examples.append("".join(window))
-    return prompts.INPUT_FEATURE.format(examples="\n".join(examples))
-
-def explain_output_feature(feature: dict, window_size: int = 1) -> str:
-    raise NotImplementedError
-
-
-def explain_input_output_feature(feature: dict, window_size: int = 1) -> str:
-    raise NotImplementedError
-
-
-def explain_feature(feature: dict, window_size: int = 1) -> str:
-    raise NotImplementedError
+        tokens = [act["tokens"][i + o] for o in range(start, end + 1) if 0 <= i + o < len(act["tokens"])]
+        examples.append("".join(tokens).replace("\u2581", "").strip())
+    return prompts.EXAMPLE_LIST.format(examples="\n".join(examples))

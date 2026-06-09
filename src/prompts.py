@@ -1,4 +1,4 @@
-INPUT_FEATURE = """
+EXAMPLE_LIST = """
 You are explaining the behavior of a neuron in a neural network. 
 Your response should be a concise explanation (3 to 20 words) that captures what the neuron detects by finding patterns in the provided list of examples.
 

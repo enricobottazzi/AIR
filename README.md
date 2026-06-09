@@ -20,5 +20,5 @@ python scripts/fetch_features.py
 2. Generate an explanation for a feature via OpenRouter
 
 ```bash
-python scripts/gen_explanation.py
+python scripts/gen_explanation_input.py
 ```
