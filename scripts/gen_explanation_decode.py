@@ -59,8 +59,8 @@ async def main(path: str = FEATURE_PATH, out_path: str = OUT_PATH) -> None:
     out = {
         "layer": feature["layer"],
         "index": feature["index"],
-        "general": await explain(feature, MaxActivationAndLogitsGeneralExplainer, 100),
-        "concise": await explain(feature, MaxActivationAndLogitsExplainer, 60),
+        "general": await explain(feature, MaxActivationAndLogitsGeneralExplainer, max_tokens=100),
+        "concise": await explain(feature, MaxActivationAndLogitsExplainer, max_tokens=100),
     }
     Path(out_path).write_text(json.dumps(out, indent=2))
     print(out)
