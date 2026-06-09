@@ -24,21 +24,23 @@ Your response should be exactly a short phrase that explains the behavior of the
 Explain the neuron above with a word or phrase, not a complete sentence.
 """
 
-def explain_acts(feature: dict, window: tuple[int, int]) -> str:
+def explain_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[str], list[float]]:
     # `window` is an inclusive (start, end) range of token offsets relative to
     # maxValueTokenIndex: negative = preceding, 0 = the max token, positive = following.
     # e.g. (0, 0) is only the top activating token.
     start, end = window
     assert start <= end, "window start must be <= end"
-    examples = []
+    examples, weights = [], []
     for act in feature["activations"]:
         i = act["maxValueTokenIndex"]
         tokens = [act["tokens"][i + o] for o in range(start, end + 1) if 0 <= i + o < len(act["tokens"])]
         examples.append("".join(tokens).replace("\u2581", "").strip())
-    return PROMPT.format(examples="\n".join(examples))
+        weights.append(act["maxValue"])
+    return PROMPT.format(examples="\n".join(examples)), examples, weights
 
-def explain_logits(feature: dict, positive: bool) -> str:
+def explain_logits(feature: dict, positive: bool) -> tuple[str, list[str], list[float]]:
     # Top tokens the feature most promotes (positive) or suppresses (negative).
     key = "pos_str" if positive else "neg_str"
     examples = [t.replace("\u2581", "").strip() for t in feature[key]]
-    return PROMPT.format(examples="\n".join(examples))
+    weights = feature["pos_values" if positive else "neg_values"]
+    return PROMPT.format(examples="\n".join(examples)), examples, weights
