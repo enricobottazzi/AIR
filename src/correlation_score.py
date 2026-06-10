@@ -23,23 +23,22 @@ def _mean_pair_sim(E, w=None) -> float:
     weights = None if w is None else np.outer(w, w)[i, j]
     return float(np.average(S[i, j], weights=weights))
 
-def gen_correlation_score(emb, w=None) -> float:
-    """Mean (optionally weighted) pairwise cosine similarity over a feature's N examples.
-    emb: (N, d) example embeddings.  w: (N,) per-example weights, or None for unweighted."""
-    return _mean_pair_sim(_unit(emb), w)
+def gen_raw_scores(emb, pool_centroid, w=None) -> tuple[float, float]:
+    """Returns (intra_correlation, inter_correlation)."""
+    E = _unit(emb)
+    return _mean_pair_sim(E, w), float(np.average(E @ pool_centroid, weights=w))
 
-def gen_baseline(model, pool: list[str], n: int, trials: int = 200, seed: int = 0) -> tuple[float, float]:
-    """Chance-level (mean, std) of the correlation score for `n` unrelated examples in this
-    embedder. Compute once per (model, channel, n) and reuse across features.
-    pool: large background corpus of unrelated strings (the population to sample from).
-    n: subset size drawn per trial. Needs len(pool) >= n."""
+def gen_baseline(model, pool: list[str], n: int, trials: int = 200, seed: int = 0) -> tuple[float, float, float, float, list[float]]:
+    """Chance-level (intra_mu, intra_sd, inter_mu, inter_sd, centroid) for `n` unrelated examples."""
     rng = np.random.default_rng(seed)
-    P = embed(pool, model)
-    scores = [gen_correlation_score(P[rng.choice(len(P), n, replace=False)]) for _ in range(trials)]
-    return float(np.mean(scores)), float(np.std(scores))
+    P = _unit(embed(pool, model))
+    centroid = _unit([P.mean(axis=0)])[0]
+    scores = [gen_raw_scores(P[rng.choice(len(P), n, replace=False)], centroid) for _ in range(trials)]
+    intra, inter = zip(*scores)
+    return float(np.mean(intra)), float(np.std(intra)), float(np.mean(inter)), float(np.std(inter)), centroid.tolist()
 
-def gen_normalized_correlation_score(emb, baseline: tuple[float, float], w=None) -> float:
-    """Z-score of a feature vs a precomputed baseline (mu, sd). Higher = more coherent;
-    ~0 = indistinguishable from random in this embedder/channel."""
-    mu, sd = baseline
-    return (gen_correlation_score(emb, w) - mu) / sd if sd else 0.0
+def gen_normalized_coherence_score(emb, baseline: tuple[float, float, float, float, list[float]], w=None) -> float:
+    """Difference of Z-scores for intra and inter correlations vs a precomputed baseline."""
+    intra_mu, intra_sd, inter_mu, inter_sd, centroid = baseline
+    intra, inter = gen_raw_scores(emb, np.array(centroid), w)
+    return ((intra - intra_mu) / intra_sd if intra_sd else 0.0) - ((inter - inter_mu) / inter_sd if inter_sd else 0.0)

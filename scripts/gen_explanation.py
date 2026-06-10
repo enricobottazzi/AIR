@@ -17,7 +17,7 @@ sys.modules["vllm.inputs"].TokensPrompt = object
 from sentence_transformers import SentenceTransformer
 
 from src.explainer import preprocess_acts, preprocess_logits
-from src.correlation_score import gen_normalized_correlation_score, gen_baseline, embed
+from src.correlation_score import gen_normalized_coherence_score, gen_baseline, embed
 from src.llm import ExplainerSetup, complete
 
 API_KEY = next(
@@ -38,9 +38,6 @@ EMBEDDERS = [
     "sentence-transformers/LaBSE",
 ]
 
-DATA_DIR = Path("data")
-BASELINE_DIR = DATA_DIR / "baselines"
-
 CHANNEL_SPECS = [
     ("input",           lambda f: preprocess_acts(f, window=(0, 0))),
     ("positive_logits", lambda f: preprocess_logits(f, positive=True)),
@@ -57,27 +54,33 @@ def feature_paths(experiment_dir: Path) -> list[Path]:
     return sorted(p for p in experiment_dir.glob("*.json") if p.is_file())
 
 
-def build_pool(recipe, exclude_stem: str | None = None) -> list[str]:
+def build_pool(experiment_dir: Path, recipe, exclude_stem: str | None = None) -> list[str]:
     return [
         ex
-        for p in sorted(DATA_DIR.rglob("gemma-*.json"))
+        for p in feature_paths(experiment_dir)
         if exclude_stem is None or p.stem != exclude_stem
         for ex in recipe(json.loads(p.read_text()))[1]
     ]
 
 
-def get_baseline(model, embedder: str, label: str, recipe, n: int, feature_stem: str) -> tuple[float, float]:
-    out = BASELINE_DIR / f"{label}_{embedder.replace('/', '-')}_baseline.json"
+def get_baseline(experiment_dir: Path, model, embedder: str, label: str, recipe, n: int, feature_stem: str) -> tuple[float, float, float, float, list[float]]:
+    baseline_dir = experiment_dir / "baselines"
+    baseline_dir.mkdir(exist_ok=True)
+    out = baseline_dir / f"{label}_{embedder.replace('/', '-')}_baseline.json"
     if not out.exists():
-        pool = build_pool(recipe, exclude_stem=feature_stem)
-        mu, sd = gen_baseline(model, pool, n=n)
+        pool = build_pool(experiment_dir, recipe, exclude_stem=feature_stem)
+        intra_mu, intra_sd, inter_mu, inter_sd, centroid = gen_baseline(model, pool, n=n)
         out.write_text(json.dumps(
             {"channel": label, "embedder": embedder, "n": n,
-             "pool_size": len(pool), "mu": mu, "sd": sd},
+             "pool_size": len(pool), "intra_mu": intra_mu, "intra_sd": intra_sd,
+             "inter_mu": inter_mu, "inter_sd": inter_sd, "centroid": centroid},
             indent=2,
         ))
     d = json.loads(out.read_text())
-    return d["mu"], d["sd"]
+    if "intra_mu" not in d:
+        out.unlink()
+        return get_baseline(experiment_dir, model, embedder, label, recipe, n, feature_stem)
+    return d["intra_mu"], d["intra_sd"], d["inter_mu"], d["inter_sd"], d["centroid"]
 
 
 def write_results(feature_path: Path, experiment_dir: Path, scores: dict, explanations: dict, labels: list[str]):
@@ -88,7 +91,7 @@ def write_results(feature_path: Path, experiment_dir: Path, scores: dict, explan
 
     def fmt_score(label: str, embedder: str) -> str:
         s = f"{scores[label][embedder]:.2f}"
-        return f"**{s}**" if label == best_channel[embedder] else s
+        return f"**{s}** *" if label == best_channel[embedder] else s
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = experiment_dir / f"results_{feature_path.stem}_{ts}.md"
@@ -115,8 +118,8 @@ def run_feature(feature_path: Path, experiment_dir: Path,
     scores = {label: {} for label in labels}
     for embedder, model in embedder_models.items():
         for (label, recipe), (_, _, examples, weights) in zip(CHANNEL_SPECS, channels):
-            baseline = get_baseline(model, embedder, label, recipe, len(examples), feature_path.stem)
-            scores[label][embedder] = gen_normalized_correlation_score(
+            baseline = get_baseline(experiment_dir, model, embedder, label, recipe, len(examples), feature_path.stem)
+            scores[label][embedder] = gen_normalized_coherence_score(
                 embed(examples, model), baseline, w=weights)
 
     write_results(feature_path, experiment_dir, scores, explanations, labels)
@@ -134,7 +137,6 @@ def main():
     if not paths:
         raise SystemExit(f"No feature JSON files in {experiment_dir}")
 
-    BASELINE_DIR.mkdir(parents=True, exist_ok=True)
     setup = ExplainerSetup(model="google/gemini-2.5-flash-lite")
     embedder_models = {e: SentenceTransformer(e) for e in EMBEDDERS}
 
