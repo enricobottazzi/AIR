@@ -1,8 +1,8 @@
-import asyncio
+import argparse
 import json
 import sys
-from datetime import datetime
 import types
+from datetime import datetime
 from pathlib import Path
 
 # delphi.clients eagerly imports a vllm-backed Offline client; stub it out (no vllm on macOS).
@@ -14,17 +14,7 @@ for attr in ("destroy_distributed_environment", "destroy_model_parallel"):
     setattr(sys.modules["vllm.distributed.parallel_state"], attr, object)
 sys.modules["vllm.inputs"].TokensPrompt = object
 
-import torch
 from sentence_transformers import SentenceTransformer
-
-from delphi.clients import OpenRouter
-from delphi.latents.latents import (
-    ActivatingExample,
-    Latent,
-    LatentRecord,
-    NonActivatingExample,
-)
-from delphi.scorers import DetectionScorer, EmbeddingScorer, FuzzingScorer
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, gen_baseline, embed
@@ -36,45 +26,50 @@ API_KEY = next(
     if l.startswith("OPENROUTER_API_KEY=")
 )
 
-EMBEDDERS = ["all-MiniLM-L6-v2", "all-mpnet-base-v2", "BAAI/bge-small-en-v1.5"]
-setup = ExplainerSetup(model="google/gemini-2.5-flash-lite")
-feature_path = Path("data/gemma-3-27b-it_11_59359.json")
-feature = json.loads(feature_path.read_text())
-# neg_feature = json.loads(Path("data/gemma-3-27b-it_6_4349.json").read_text())
+EMBEDDERS = [
+    "all-MiniLM-L6-v2",
+    "all-mpnet-base-v2",
+    "BAAI/bge-small-en-v1.5",
+    "Qwen/Qwen3-Embedding-0.6B",
+    "BAAI/bge-m3",
+    "intfloat/multilingual-e5-large-instruct",
+    "google/embeddinggemma-300m",
+    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+    "sentence-transformers/LaBSE",
+]
 
-# (label, recipe) per channel; recipe maps a feature dict -> (prompt, examples, weights).
+DATA_DIR = Path("data")
+BASELINE_DIR = DATA_DIR / "baselines"
+
 CHANNEL_SPECS = [
     ("input",           lambda f: preprocess_acts(f, window=(0, 0))),
     ("positive_logits", lambda f: preprocess_logits(f, positive=True)),
     ("negative_logits", lambda f: preprocess_logits(f, positive=False)),
+    ("preceding",       lambda f: preprocess_acts(f, window=(-1, -1))),
     ("output",          lambda f: preprocess_acts(f, window=(1, 1))),
     ("short_window",    lambda f: preprocess_acts(f, window=(-1, 1))),
     ("medium_window",   lambda f: preprocess_acts(f, window=(-10, 10))),
     ("long_window",     lambda f: preprocess_acts(f, window=(-25, 25))),
 ]
-# (label, prompt, examples, weights) per channel for the feature under study.
-CHANNELS = [(label, *recipe(feature)) for label, recipe in CHANNEL_SPECS]
 
 
-def build_pool(recipe, exclude: Path) -> list[str]:
-    # Background corpus for a channel: its examples drawn from every *other* feature file.
+def feature_paths(experiment_dir: Path) -> list[Path]:
+    return sorted(p for p in experiment_dir.glob("*.json") if p.is_file())
+
+
+def build_pool(recipe, exclude_stem: str | None = None) -> list[str]:
     return [
         ex
-        for p in sorted(Path("data").glob("gemma-*.json"))
-        if p != exclude
+        for p in sorted(DATA_DIR.rglob("gemma-*.json"))
+        if exclude_stem is None or p.stem != exclude_stem
         for ex in recipe(json.loads(p.read_text()))[1]
     ]
 
 
-BASELINE_DIR = Path("data/baselines")
-BASELINE_DIR.mkdir(exist_ok=True)
-
-
-def get_baseline(model, embedder: str, label: str, recipe, n: int) -> tuple[float, float]:
-    # Load cached (mu, sd) for (channel, embedder), computing + persisting it if absent.
+def get_baseline(model, embedder: str, label: str, recipe, n: int, feature_stem: str) -> tuple[float, float]:
     out = BASELINE_DIR / f"{label}_{embedder.replace('/', '-')}_baseline.json"
     if not out.exists():
-        pool = build_pool(recipe, exclude=feature_path)
+        pool = build_pool(recipe, exclude_stem=feature_stem)
         mu, sd = gen_baseline(model, pool, n=n)
         out.write_text(json.dumps(
             {"channel": label, "embedder": embedder, "n": n,
@@ -85,90 +80,68 @@ def get_baseline(model, embedder: str, label: str, recipe, n: int) -> tuple[floa
     return d["mu"], d["sd"]
 
 
-# Explanation is embedder-independent -> compute once per channel.
-explanations = {label: complete(setup, prompt, API_KEY).strip() for label, prompt, _, _ in CHANNELS}
+def write_results(feature_path: Path, experiment_dir: Path, scores: dict, explanations: dict, labels: list[str]):
+    best_channel = {
+        e: max(((l, scores[l][e]) for l in labels if scores[l][e] > 0), key=lambda x: x[1], default=(None,))[0]
+        for e in EMBEDDERS
+    }
 
-# z-score per (channel, embedder).
-scores = {label: {} for label, *_ in CHANNELS}
-for embedder in EMBEDDERS:
-    model = SentenceTransformer(embedder)
-    for (label, recipe), (_, _, examples, weights) in zip(CHANNEL_SPECS, CHANNELS):
-        baseline = get_baseline(model, embedder, label, recipe, n=len(examples))
-        scores[label][embedder] = gen_normalized_correlation_score(embed(examples, model), baseline, w=weights)
+    def fmt_score(label: str, embedder: str) -> str:
+        s = f"{scores[label][embedder]:.2f}"
+        return f"**{s}**" if label == best_channel[embedder] else s
 
-# write a channel x embedder comparison table of z-scores as markdown
-ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-out = Path(f"data/results_{feature_path.stem}_{ts}.md")
-rows = [
-    f"| channel | {' | '.join(EMBEDDERS)} | explanation |",
-    f"|---|{'---|' * len(EMBEDDERS)}---|",
-    *(
-        f"| {label} | {' | '.join(f'{scores[label][e]:.2f}' for e in EMBEDDERS)} | {explanations[label]} |"
-        for label, *_ in CHANNELS
-    ),
-]
-out.write_text("\n".join(rows) + "\n")
-print(f"wrote {out}")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = experiment_dir / f"results_{feature_path.stem}_{ts}.md"
+    rows = [
+        f"| channel | {' | '.join(EMBEDDERS)} | explanation |",
+        f"|---|{'---|' * len(EMBEDDERS)}---|",
+        *(
+            f"| {label} | {' | '.join(fmt_score(label, e) for e in EMBEDDERS)} | {explanations[label]} |"
+            for label in labels
+        ),
+    ]
+    out.write_text("\n".join(rows) + "\n")
+    print(f"wrote {out}")
 
 
-# def load_record(explanation: str) -> LatentRecord:
-#     examples = [
-#         ActivatingExample(
-#             tokens=torch.zeros(len(a["values"]), dtype=torch.long),
-#             activations=torch.tensor(a["values"], dtype=torch.float32),
-#             str_tokens=a["tokens"],
-#         )
-#         for a in feature["activations"]
-#     ]
-#     examples.sort(key=lambda e: e.max_activation, reverse=True)
-#     record = LatentRecord(latent=Latent(feature["layer"], int(feature["index"])))
-#     record.test = examples
-#     record.not_active = [
-#         NonActivatingExample(
-#             tokens=torch.zeros(len(a["values"]), dtype=torch.long),
-#             activations=torch.tensor(a["values"], dtype=torch.float32),
-#             str_tokens=a["tokens"],
-#             distance=-1.0,
-#         )
-#         for a in neg_feature["activations"]
-#     ]
-#     record.explanation = explanation
-#     return record
+def run_feature(feature_path: Path, experiment_dir: Path,
+                setup: ExplainerSetup, embedder_models: dict[str, SentenceTransformer]):
+    feature = json.loads(feature_path.read_text())
+    channels = [(label, *recipe(feature)) for label, recipe in CHANNEL_SPECS]
+    labels = [label for label, *_ in channels]
+
+    explanations = {label: complete(setup, prompt, API_KEY).strip() for label, prompt, _, _ in channels}
+
+    scores = {label: {} for label in labels}
+    for embedder, model in embedder_models.items():
+        for (label, recipe), (_, _, examples, weights) in zip(CHANNEL_SPECS, channels):
+            baseline = get_baseline(model, embedder, label, recipe, len(examples), feature_path.stem)
+            scores[label][embedder] = gen_normalized_correlation_score(
+                embed(examples, model), baseline, w=weights)
+
+    write_results(feature_path, experiment_dir, scores, explanations, labels)
 
 
-# def recall(score) -> float:
-#     correct = [s.correct for s in score if s.correct is not None]
-#     return sum(correct) / len(correct) if correct else 0.0
+def main():
+    parser = argparse.ArgumentParser(description="Generate explanations and correlation scores for all features in an experiment.")
+    parser.add_argument("experiment_dir", type=Path, help="Directory containing feature JSON files")
+    args = parser.parse_args()
+    experiment_dir = args.experiment_dir
+    if not experiment_dir.is_dir():
+        raise SystemExit(f"Not a directory: {experiment_dir}")
+
+    paths = feature_paths(experiment_dir)
+    if not paths:
+        raise SystemExit(f"No feature JSON files in {experiment_dir}")
+
+    BASELINE_DIR.mkdir(parents=True, exist_ok=True)
+    setup = ExplainerSetup(model="google/gemini-2.5-flash-lite")
+    embedder_models = {e: SentenceTransformer(e) for e in EMBEDDERS}
+
+    for feature_path in paths:
+        print(f"processing {feature_path.name}")
+        run_feature(feature_path, experiment_dir, setup, embedder_models)
 
 
-# def emb_summary(score) -> dict:
-#     pos = [s.similarity for s in score if s.distance >= 0]
-#     neg = [s.similarity for s in score if s.distance < 0]
-#     p, n = sum(pos) / max(len(pos), 1), sum(neg) / max(len(neg), 1)
-#     return {"mean_pos": p, "mean_neg": n, "gap": p - n}
-
-
-# async def score():
-#     explanation = complete(setup, prompt_5, API_KEY).strip()
-#     record = load_record(explanation)
-#     client = OpenRouter("google/gemini-2.5-flash-lite", api_key=API_KEY)
-
-#     # fuzz = await FuzzingScorer(client, fuzz_type="active")(record)
-#     detect = await DetectionScorer(client)(record)
-#     embed_score = await EmbeddingScorer(model)(record)
-
-#     for s in detect.score:
-#         print(s.activating, s.prediction, s.correct)
-
-#     out = {
-#         "explanation": explanation,
-#         # "fuzz_recall": recall(fuzz.score),
-#         "detection_recall": recall(detect.score),
-#         "embedding_similarity": emb_summary(embed_score.score),
-#     }
-#     Path("data/scores.json").write_text(json.dumps(out, indent=2))
-#     print(out)
-
-
-# if __name__ == "__main__":
-#     asyncio.run(score())
+if __name__ == "__main__":
+    main()

@@ -1,9 +1,16 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+def _prefixed(examples: list[str], model: SentenceTransformer) -> list[str]:
+    # E5-instruct expects "query: " on inputs; use it on all sides for symmetric similarity.
+    name = str(getattr(model, "model_name", "")).lower()
+    if "e5" in name and "instruct" in name:
+        return [f"query: {x}" for x in examples]
+    return examples
+
 def embed(examples: list[str], model: SentenceTransformer):
     # Encode example strings (as returned by explain_acts / explain_logits).
-    return model.encode(examples)
+    return model.encode(_prefixed(examples, model))
 
 def _unit(emb):
     E = np.asarray(emb, float)
