@@ -94,7 +94,10 @@ def write_results(feature_path: Path, experiment_dir: Path, scores: dict, explan
         return f"**{s}** *" if label == best_channel[embedder] else s
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = experiment_dir / f"results_{feature_path.stem}_{ts}.md"
+    results_dir = experiment_dir / "results"
+    results_dir.mkdir(exist_ok=True)
+    
+    out_md = results_dir / f"results_{feature_path.stem}_{ts}.md"
     rows = [
         f"| channel | {' | '.join(EMBEDDERS)} | explanation |",
         f"|---|{'---|' * len(EMBEDDERS)}---|",
@@ -103,8 +106,18 @@ def write_results(feature_path: Path, experiment_dir: Path, scores: dict, explan
             for label in labels
         ),
     ]
-    out.write_text("\n".join(rows) + "\n")
-    print(f"wrote {out}")
+    out_md.write_text("\n".join(rows) + "\n")
+    
+    out_json = results_dir / f"results_{feature_path.stem}_{ts}.json"
+    json_data = {
+        "feature": feature_path.stem,
+        "best_channel": best_channel,
+        "scores": scores,
+        "explanations": explanations
+    }
+    out_json.write_text(json.dumps(json_data, indent=2))
+    
+    print(f"wrote {out_md.name} and {out_json.name}")
 
 
 def run_feature(feature_path: Path, experiment_dir: Path,
