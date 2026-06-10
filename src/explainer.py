@@ -24,8 +24,7 @@ Your response should be exactly a short phrase that explains the behavior of the
 Explain the neuron above with a word or phrase, not a complete sentence.
 """
 
-### TODO: rename into pre-process
-def explain_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[str], list[float]]:
+def preprocess_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[str], list[float]]:
     # `window` is an inclusive (start, end) range of token offsets relative to
     # maxValueTokenIndex: negative = preceding, 0 = the max token, positive = following.
     # e.g. (0, 0) is only the top activating token.
@@ -39,7 +38,7 @@ def explain_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[str]
         weights.append(act["maxValue"])
     return PROMPT.format(examples="\n".join(examples)), examples, weights
 
-def explain_logits(feature: dict, positive: bool) -> tuple[str, list[str], list[float]]:
+def preprocess_logits(feature: dict, positive: bool) -> tuple[str, list[str], list[float]]:
     # Top tokens the feature most promotes (positive) or suppresses (negative).
     key = "pos_str" if positive else "neg_str"
     examples = [t.replace("\u2581", "").strip() for t in feature[key]]
