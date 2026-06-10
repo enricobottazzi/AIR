@@ -37,7 +37,7 @@ def gen_baseline(model, pool: list[str], n: int, trials: int = 200, seed: int = 
     intra, inter = zip(*scores)
     return float(np.mean(intra)), float(np.std(intra)), float(np.mean(inter)), float(np.std(inter)), centroid.tolist()
 
-def gen_normalized_coherence_score(emb, baseline: tuple[float, float, float, float, list[float]], w=None) -> float:
+def gen_normalized_correlation_score(emb, baseline: tuple[float, float, float, float, list[float]], w=None) -> float:
     """Difference of Z-scores for intra and inter correlations vs a precomputed baseline."""
     intra_mu, intra_sd, inter_mu, inter_sd, centroid = baseline
     intra, inter = gen_raw_scores(emb, np.array(centroid), w)

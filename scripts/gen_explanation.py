@@ -17,7 +17,7 @@ sys.modules["vllm.inputs"].TokensPrompt = object
 from sentence_transformers import SentenceTransformer
 
 from src.explainer import preprocess_acts, preprocess_logits
-from src.correlation_score import gen_normalized_coherence_score, gen_baseline, embed
+from src.correlation_score import gen_normalized_correlation_score, gen_baseline, embed
 from src.llm import ExplainerSetup, complete
 
 API_KEY = next(
@@ -119,7 +119,7 @@ def run_feature(feature_path: Path, experiment_dir: Path,
     for embedder, model in embedder_models.items():
         for (label, recipe), (_, _, examples, weights) in zip(CHANNEL_SPECS, channels):
             baseline = get_baseline(experiment_dir, model, embedder, label, recipe, len(examples), feature_path.stem)
-            scores[label][embedder] = gen_normalized_coherence_score(
+            scores[label][embedder] = gen_normalized_correlation_score(
                 embed(examples, model), baseline, w=weights)
 
     write_results(feature_path, experiment_dir, scores, explanations, labels)
