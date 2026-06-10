@@ -1,6 +1,6 @@
 PROMPT = """
 You are explaining the behavior of a neuron in a neural network.
-Your response should be a concise explanation (3 to 20 words) that captures what the neuron detects by finding patterns in the provided list of examples.
+Your response should be a concise explanation (3 to 20 words) that captures what the neuron detects by finding patterns in the provided list of examples (each example is wrapped in single quotes).
 
 Rules:
 - Keep your explanation concise (3 to 20 words).
@@ -36,11 +36,11 @@ def preprocess_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[s
         tokens = [act["tokens"][i + o] for o in range(start, end + 1) if 0 <= i + o < len(act["tokens"])]
         examples.append("".join(tokens).replace("\u2581", "").strip())
         weights.append(act["maxValue"])
-    return PROMPT.format(examples="\n".join(examples)), examples, weights
+    return PROMPT.format(examples="\n".join(f"'{ex}'" for ex in examples)), examples, weights
 
 def preprocess_logits(feature: dict, positive: bool) -> tuple[str, list[str], list[float]]:
     # Top tokens the feature most promotes (positive) or suppresses (negative).
     key = "pos_str" if positive else "neg_str"
     examples = [t.replace("\u2581", "").strip() for t in feature[key]]
     weights = feature["pos_values" if positive else "neg_values"]
-    return PROMPT.format(examples="\n".join(examples)), examples, weights
+    return PROMPT.format(examples="\n".join(f"'{ex}'" for ex in examples)), examples, weights
