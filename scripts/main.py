@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_pool, generate_explanations_chair, generate_explanations_neuronpedia, get_baseline
+from utils import build_pool, generate_explanations_chair, generate_explanations_neuronpedia, get_baseline, score_explanation
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -84,8 +84,17 @@ def generate_explanations(
 def postprocess_explanations(experiment_dir: Path):
     pass
 
-def score_explanations(experiment_dir: Path, embedders: list):
-    pass
+def score_explanations(experiment_dir: Path, openrouter_api_key: str, model_name: str, score_types: list[str]):
+    for feature_path in experiment_dir.glob("*.json"):
+        feat = json.loads(feature_path.read_text())
+        for explanation in feat.get("explanations", []):
+            score = score_explanation(experiment_dir, openrouter_api_key, f"google/{model_name}", score_types)
+            explanation.setdefault("scores", []).append({
+                "value": score,
+                "explanationScoreTypeName": score_type,
+                "explanationScoreModelName": f"google/{model_name}"
+            })
+        feature_path.write_text(json.dumps(feat, indent=2))
 
 def aggregate_data(experiment_dir: Path):
     pass
@@ -123,6 +132,7 @@ def main():
     ]
     EXPLANATION_MODEL_NAME = "gemini-2.5-flash-lite"
     NEURONPEDIA_EXPLANATION_TYPES = ["np_max-act-logits", "oai_token-act-pair"]
+    SCORE_TYPES = ["fuzz"]
     
     NEURONPEDIA_API_KEY = os.environ.get("NEURONPEDIA_API_KEY", "")
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -163,7 +173,7 @@ def main():
 
     # 7. Score the explanations
     print("7. Scoring explanations...")
-    score_explanations(experiment_dir, EMBEDDERS)
+    score_explanations(experiment_dir, OPENROUTER_API_KEY, EXPLANATION_MODEL_NAME, SCORE_TYPES)
 
     # 8. Aggregate data in csv and illustrations
     print("8. Aggregating data...")

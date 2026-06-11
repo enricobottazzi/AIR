@@ -1,6 +1,7 @@
 import json
 import urllib.request
 from pathlib import Path
+from sentence_transformers import SentenceTransformer
 
 from src.correlation_score import gen_baseline
 from src.llm import ExplainerSetup, complete
@@ -12,7 +13,7 @@ def build_pool(experiment_dir: Path, channel_id: str) -> list[str]:
         pool.extend(feat["channels"][channel_id]["examples"])
     return pool
 
-def get_baseline(experiment_dir: Path, embedder_model, embedder_id: str, channel_id: str, pool: list[str]):
+def get_baseline(experiment_dir: Path, embedder_model: SentenceTransformer, embedder_id: str, channel_id: str, pool: list[str]):
     baseline_dir = experiment_dir / "baselines"
     baseline_dir.mkdir(parents=True, exist_ok=True)
     out = baseline_dir / f"{channel_id}_{embedder_id.replace('/', '-')}_baseline.json"
@@ -95,3 +96,7 @@ def generate_explanations_chair(experiment_dir: Path, api_key: str, model_name: 
             feature_path.write_text(json.dumps(feat, indent=2))
 
     print(f"Generated {generated} CHAIR explanations.")
+
+def score_explanation(experiment_dir: Path, openrouter_api_key: str, model_name: str, score_types: list[str]):
+    return 1
+
