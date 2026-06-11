@@ -75,17 +75,17 @@ def generate_explanations_neuronpedia(experiment_dir: Path, api_key: str, model_
 
     print(f"Generated {generated} Neuronpedia explanations.")
 
-def generate_explanations_chair(experiment_dir: Path, api_key: str, model_name: str, channel_ids: list[str]):
+def generate_explanations_air(experiment_dir: Path, api_key: str, model_name: str, channel_ids: list[str]):
     setup = ExplainerSetup(model=model_name)
     feature_paths = list(experiment_dir.glob("*.json"))
     generated = 0
-    print(f"Generating CHAIR explanations for {len(feature_paths)} features...")
+    print(f"Generating AIR explanations for {len(feature_paths)} features...")
 
     for feature_path in feature_paths:
         feat = json.loads(feature_path.read_text())
         explanations = feat["explanations"]
         existing_types = {e.get("typeName") for e in explanations}
-        todo = [c for c in channel_ids if f"chair_{c}" not in existing_types]
+        todo = [c for c in channel_ids if f"air_{c}" not in existing_types]
         print(f"{feature_path.name}: {len(todo)} missing")
 
         for channel_id in todo:
@@ -93,7 +93,7 @@ def generate_explanations_chair(experiment_dir: Path, api_key: str, model_name: 
                 "id": None,
                 "description": complete(setup, feat["channels"][channel_id]["prompt"], api_key).strip(),
                 "explanationModelName": model_name,
-                "typeName": f"chair_{channel_id}",
+                "typeName": f"air_{channel_id}",
                 "scores": [],
                 "triggeredByUser": None
             })
@@ -102,7 +102,7 @@ def generate_explanations_chair(experiment_dir: Path, api_key: str, model_name: 
         if todo:
             feature_path.write_text(json.dumps(feat, indent=2))
 
-    print(f"Generated {generated} CHAIR explanations.")
+    print(f"Generated {generated} AIR explanations.")
 
 def _example_tensors(activation: dict):
     values = activation["values"]

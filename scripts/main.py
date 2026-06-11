@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_delphi_record, build_pool, delphi_fuzz_scorer, generate_explanations_chair, generate_explanations_neuronpedia, get_baseline
+from utils import build_delphi_record, build_pool, delphi_fuzz_scorer, generate_explanations_air, generate_explanations_neuronpedia, get_baseline
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -79,12 +79,12 @@ def generate_explanations(
     channel_ids: list[str]
 ):
     generate_explanations_neuronpedia(experiment_dir, neuronpedia_api_key, model_name, neuronpedia_explanation_types)
-    generate_explanations_chair(experiment_dir, openrouter_api_key, f"google/{model_name}", channel_ids)
+    generate_explanations_air(experiment_dir, openrouter_api_key, f"google/{model_name}", channel_ids)
 
 def postprocess_explanations(experiment_dir: Path, channel_specs: list):
-    chair_description_prefixes = {
-        channel_id: chair_prefix
-        for channel_id, _, chair_prefix in channel_specs
+    air_description_prefixes = {
+        channel_id: air_prefix
+        for channel_id, _, air_prefix in channel_specs
     }
 
     for feature_path in sorted(experiment_dir.glob("*.json")):
@@ -93,11 +93,11 @@ def postprocess_explanations(experiment_dir: Path, channel_specs: list):
 
         for explanation in feat.get("explanations", []):
             type_name = explanation.get("typeName", "")
-            if not type_name.startswith("chair_"):
+            if not type_name.startswith("air_"):
                 continue
 
-            channel_id = type_name.removeprefix("chair_")
-            prefix = chair_description_prefixes.get(channel_id)
+            channel_id = type_name.removeprefix("air_")
+            prefix = air_description_prefixes.get(channel_id)
             if not prefix:
                 continue
 
