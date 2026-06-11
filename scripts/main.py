@@ -145,6 +145,8 @@ def score_explanations(
                 explanation,
                 openrouter_api_key,
                 score_model_name,
+                feature_id=feature_path.stem,
+                typeName=explanation.get("typeName")
             )
             explanation["scores"].append({
                 "value": score,

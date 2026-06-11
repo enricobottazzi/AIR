@@ -91,11 +91,12 @@ def generate_explanations_air(experiment_dir: Path, api_key: str, model_name: st
         print(f"{feature_path.name}: {len(todo)} missing")
 
         for channel_id in todo:
+            type_name = f"air_{channel_id}"
             explanations.append({
                 "id": None,
-                "description": complete(setup, feat["channels"][channel_id]["prompt"], api_key).strip(),
+                "description": complete(setup, feat["channels"][channel_id]["prompt"], api_key, feature_id=feature_path.stem, typeName=type_name).strip(),
                 "explanationModelName": model_name,
-                "typeName": f"air_{channel_id}",
+                "typeName": type_name,
                 "scores": [],
                 "triggeredByUser": None
             })
@@ -179,8 +180,12 @@ async def _run_delphi_fuzz(
     openrouter_api_key: str,
     model_name: str,
     n_examples_shown: int = 5,
+    **trace
 ):
     client = OpenRouter(model_name, api_key=openrouter_api_key)
+    if trace:
+        orig = client.client.post
+        client.client.post = lambda *a, **kw: orig(*a, **{**kw, "json": {**kw.get("json", {}), "trace": trace}})
     try:
         return await FuzzingScorer(
             client,
@@ -202,6 +207,7 @@ def delphi_fuzz_scorer(
     openrouter_api_key: str,
     model_name: str,
     n_examples_shown: int = 5,
+    **trace
 ) -> float:
     record = copy.copy(delphi_record)
     record.explanation = explanation["description"]
@@ -211,6 +217,7 @@ def delphi_fuzz_scorer(
             openrouter_api_key,
             model_name,
             n_examples_shown=n_examples_shown,
+            **trace
         )
     )
     return _accuracy(fuzz)
