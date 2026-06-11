@@ -20,67 +20,8 @@ from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, gen_baseline, embed
 from src.llm import ExplainerSetup, complete
 
-API_KEY = next(
-    l.split("=", 1)[1]
-    for l in Path(".env").read_text().splitlines()
-    if l.startswith("OPENROUTER_API_KEY=")
-)
-
-EMBEDDERS = [
-    "all-MiniLM-L6-v2",
-    "all-mpnet-base-v2",
-    "BAAI/bge-small-en-v1.5",
-    "Qwen/Qwen3-Embedding-0.6B",
-    "BAAI/bge-m3",
-    "intfloat/multilingual-e5-large-instruct",
-    "google/embeddinggemma-300m",
-    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-    "sentence-transformers/LaBSE",
-]
-
-CHANNEL_SPECS = [
-    ("input",           lambda f: preprocess_acts(f, window=(0, 0))),
-    ("positive_logits", lambda f: preprocess_logits(f, positive=True)),
-    ("negative_logits", lambda f: preprocess_logits(f, positive=False)),
-    ("preceding",       lambda f: preprocess_acts(f, window=(-1, -1))),
-    ("output",          lambda f: preprocess_acts(f, window=(1, 1))),
-    ("short_window",    lambda f: preprocess_acts(f, window=(-1, 1))),
-    ("medium_window",   lambda f: preprocess_acts(f, window=(-10, 10))),
-    ("long_window",     lambda f: preprocess_acts(f, window=(-25, 25))),
-]
-
-
 def feature_paths(experiment_dir: Path) -> list[Path]:
     return sorted(p for p in experiment_dir.glob("*.json") if p.is_file())
-
-
-def build_pool(experiment_dir: Path, recipe, exclude_stem: str | None = None) -> list[str]:
-    return [
-        ex
-        for p in feature_paths(experiment_dir)
-        if exclude_stem is None or p.stem != exclude_stem
-        for ex in recipe(json.loads(p.read_text()))[1]
-    ]
-
-
-def get_baseline(experiment_dir: Path, model, embedder: str, label: str, recipe, n: int, feature_stem: str) -> tuple[float, float, float, float, list[float]]:
-    baseline_dir = experiment_dir / "baselines"
-    baseline_dir.mkdir(exist_ok=True)
-    out = baseline_dir / f"{label}_{embedder.replace('/', '-')}_baseline.json"
-    if not out.exists():
-        pool = build_pool(experiment_dir, recipe, exclude_stem=feature_stem)
-        intra_mu, intra_sd, inter_mu, inter_sd, centroid = gen_baseline(model, pool, n=n)
-        out.write_text(json.dumps(
-            {"channel": label, "embedder": embedder, "n": n,
-             "pool_size": len(pool), "intra_mu": intra_mu, "intra_sd": intra_sd,
-             "inter_mu": inter_mu, "inter_sd": inter_sd, "centroid": centroid},
-            indent=2,
-        ))
-    d = json.loads(out.read_text())
-    if "intra_mu" not in d:
-        out.unlink()
-        return get_baseline(experiment_dir, model, embedder, label, recipe, n, feature_stem)
-    return d["intra_mu"], d["intra_sd"], d["inter_mu"], d["inter_sd"], d["centroid"]
 
 
 def write_results(feature_path: Path, experiment_dir: Path, scores: dict, explanations: dict, labels: list[str]):
