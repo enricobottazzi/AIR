@@ -300,3 +300,28 @@ def write_feature_score_matrix_csv(experiment_dir: Path, neuronpedia_explanation
         w.writerow(["average"] + [average(j) for j in range(len(columns))])
     return out
 
+def plot_feature_score_matrix(csv_path: Path, center: float = 0.5) -> Path:
+    """Diverging bar chart of the `average` row, centered at `center`:
+    models with average < center bar downward (negative), >= center bar upward."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    rows = list(csv.reader(csv_path.read_text().splitlines()))
+    header, average = rows[0][1:], rows[-1][1:]
+    labels, deltas = zip(*[(c, float(v) - center) for c, v in zip(header, average) if v != ""])
+
+    fig, ax = plt.subplots(figsize=(0.6 * len(labels) + 2, 6))
+    ax.bar(range(len(labels)), deltas, color=["#2a9d8f" if d >= 0 else "#e76f51" for d in deltas])
+    ax.axhline(0, color="black", lw=0.8)
+    ax.set_xticks(range(len(labels)), labels, rotation=45, ha="right")
+    ax.set_yticks(ax.get_yticks())
+    ax.set_yticklabels([f"{t + center:.2f}" for t in ax.get_yticks()])
+    ax.set_ylabel("average delphi_fuzz score")
+    ax.set_title(csv_path.stem)
+    fig.tight_layout()
+    out = csv_path.with_suffix(".png")
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    return out
+

@@ -6,6 +6,7 @@ dependencies = [
     "eai-delphi @ git+https://github.com/EleutherAI/delphi.git",
     "neuron-explainer @ git+https://github.com/decoderesearch/automated-interpretability.git",
     "python-dotenv",
+    "matplotlib",
 ]
 
 [tool.setuptools]
