@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_pool, get_baseline
+from utils import build_pool, generate_explanations_chair, generate_explanations_neuronpedia, get_baseline
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -70,8 +70,16 @@ def generate_correlation_scores(experiment_dir: Path, embedder_ids: list, channe
                 
             feature_path.write_text(json.dumps(feat, indent=2))
 
-def generate_explanations(experiment_dir: Path, channel_specs: list, api_key: str):
-    pass
+def generate_explanations(
+    experiment_dir: Path,
+    neuronpedia_api_key: str,
+    openrouter_api_key: str,
+    model_name: str,
+    neuronpedia_explanation_types: list[str],
+    channel_ids: list[str]
+):
+    # generate_explanations_neuronpedia(experiment_dir, neuronpedia_api_key, model_name, neuronpedia_explanation_types)
+    generate_explanations_chair(experiment_dir, openrouter_api_key, f"google/{model_name}", channel_ids)
 
 def postprocess_explanations(experiment_dir: Path):
     pass
@@ -113,6 +121,8 @@ def main():
         # ("medium_window",   lambda f: preprocess_acts(f, window=(-10, 10))),
         # ("long_window",     lambda f: preprocess_acts(f, window=(-25, 25))),
     ]
+    EXPLANATION_MODEL_NAME = "gemini-2.5-flash-lite"
+    NEURONPEDIA_EXPLANATION_TYPES = ["np_max-act-logits", "oai_token-act-pair"]
     
     NEURONPEDIA_API_KEY = os.environ.get("NEURONPEDIA_API_KEY", "")
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -120,29 +130,36 @@ def main():
     N_FEATURES = 50
     MIN_NONZERO_ACTIVATIONS = 20
 
-    # 1. Sample the features
-    print("1. Sampling features...")
-    sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
+    # # 1. Sample the features
+    # print("1. Sampling features...")
+    # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
 
-    # 2. Preprocess the features
-    print("2. Preprocessing features...")
-    preprocess_features(experiment_dir, CHANNEL_SPECS)
+    # # 2. Preprocess the features
+    # print("2. Preprocessing features...")
+    # preprocess_features(experiment_dir, CHANNEL_SPECS)
 
-    # 3. Preprocess the embedders
-    print("3. Preprocessing embedders...")
-    preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # # 3. Preprocess the embedders
+    # print("3. Preprocessing embedders...")
+    # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # 4. Generate correlation scores
-    print("4. Generating correlation scores...")
-    generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # # 4. Generate correlation scores
+    # print("4. Generating correlation scores...")
+    # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
     # 5. Generate the explanation
     print("5. Generating explanations...")
-    generate_explanations(experiment_dir, CHANNEL_SPECS, OPENROUTER_API_KEY)
+    generate_explanations(
+        experiment_dir,
+        NEURONPEDIA_API_KEY,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+        NEURONPEDIA_EXPLANATION_TYPES,
+        [c[0] for c in CHANNEL_SPECS]
+    )
 
-    # 6. Postprocess the explanations
-    print("6. Postprocessing explanations...")
-    postprocess_explanations(experiment_dir)
+    # # 6. Postprocess the explanations
+    # print("6. Postprocessing explanations...")
+    # postprocess_explanations(experiment_dir)
 
     # 7. Score the explanations
     print("7. Scoring explanations...")
