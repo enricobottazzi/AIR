@@ -35,13 +35,17 @@ def gen_raw_scores(emb, pool_centroid, w=None) -> tuple[float, float]:
     E = _unit(emb)
     return _mean_pair_sim(E, w), float(np.average(E @ pool_centroid, weights=w))
 
-def gen_baseline(model, pool: list[str], n: int, trials: int = 200, seed: int = 0, model_id: str = "") -> tuple[float, float, float, float, list[float]]:
-    """Chance-level (intra_mu, intra_sd, inter_mu, inter_sd, centroid) for `n` unrelated examples."""
+def gen_baseline(model, pool: list[str], weights: list[float], n: int, trials: int = 200, seed: int = 0, model_id: str = "") -> tuple[float, float, float, float, list[float]]:
+    """Chance-level (intra_mu, intra_sd, inter_mu, inter_sd, centroid) for `n` unrelated examples.
+    `weights` must match the per-example weighting used by the observed score so the null is comparable."""
     rng = np.random.default_rng(seed)
     P = _unit(embed(pool, model, model_id))
-    centroid = _unit([P.mean(axis=0)])[0]
-    scores = [gen_raw_scores(P[rng.choice(len(P), n, replace=False)], centroid) for _ in range(trials)]
-    intra, inter = zip(*scores)
+    w = np.asarray(weights, float)
+    centroid = _unit([np.average(P, axis=0, weights=w)])[0]
+    def trial():
+        idx = rng.choice(len(P), n, replace=False)
+        return gen_raw_scores(P[idx], centroid, w[idx])
+    intra, inter = zip(*(trial() for _ in range(trials)))
     return float(np.mean(intra)), float(np.std(intra)), float(np.mean(inter)), float(np.std(inter)), centroid.tolist()
 
 def gen_normalized_correlation_score(emb, baseline: tuple[float, float, float, float, list[float]], w=None) -> float:

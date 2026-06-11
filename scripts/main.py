@@ -47,8 +47,8 @@ def preprocess_embedders(experiment_dir: Path, embedder_ids: list, channel_ids: 
     for embedder_id in embedder_ids:
         embedder_model = SentenceTransformer(embedder_id)
         for channel_id in channel_ids:
-            pool = build_pool(experiment_dir, channel_id)
-            get_baseline(experiment_dir, embedder_model, embedder_id, channel_id, pool)
+            pool, weights = build_pool(experiment_dir, channel_id)
+            get_baseline(experiment_dir, embedder_model, embedder_id, channel_id, pool, weights)
 
 def generate_correlation_scores(experiment_dir: Path, embedder_ids: list, channel_ids: list):
     for embedder_id in embedder_ids:
