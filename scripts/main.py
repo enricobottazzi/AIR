@@ -78,7 +78,7 @@ def generate_explanations(
     neuronpedia_explanation_types: list[str],
     channel_ids: list[str]
 ):
-    # generate_explanations_neuronpedia(experiment_dir, neuronpedia_api_key, model_name, neuronpedia_explanation_types)
+    generate_explanations_neuronpedia(experiment_dir, neuronpedia_api_key, model_name, neuronpedia_explanation_types)
     generate_explanations_chair(experiment_dir, openrouter_api_key, f"google/{model_name}", channel_ids)
 
 def postprocess_explanations(experiment_dir: Path):
@@ -103,7 +103,7 @@ def score_explanations(
                 openrouter_api_key,
                 f"google/{model_name}",
             )
-            explanation.setdefault("scores", []).append({
+            explanation["scores"].append({
                 "value": score,
                 "explanationScoreTypeName": "delphi_fuzz",
                 "explanationScoreModelName": f"google/{model_name}"

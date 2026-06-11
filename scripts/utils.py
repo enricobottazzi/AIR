@@ -1,10 +1,14 @@
+import asyncio
+import copy
 import json
 import random
 import urllib.request
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 import torch
+from delphi.clients import OpenRouter
 from delphi.latents import ActivatingExample, Latent, LatentRecord, NonActivatingExample
+from delphi.scorers import FuzzingScorer
 
 from src.correlation_score import gen_baseline
 from src.llm import ExplainerSetup, complete
@@ -163,11 +167,44 @@ def build_delphi_record(
     record.not_active = rng.sample(negative_pool, n_negative)
     return record
 
+async def _run_delphi_fuzz(
+    delphi_record: LatentRecord,
+    openrouter_api_key: str,
+    model_name: str,
+    n_examples_shown: int = 4,
+):
+    client = OpenRouter(model_name, api_key=openrouter_api_key)
+    try:
+        return await FuzzingScorer(
+            client,
+            fuzz_type="default",
+            n_examples_shown=n_examples_shown,
+        )(delphi_record)
+    finally:
+        await client.client.aclose()
+
+def _recall(fuzz) -> float:
+    correct = [score.correct for score in fuzz.score if score.correct is not None]
+    if not correct:
+        raise ValueError("Delphi fuzz scorer returned no valid predictions")
+    return sum(correct) / len(correct)
+
 def delphi_fuzz_scorer(
     delphi_record: LatentRecord,
     explanation: dict,
     openrouter_api_key: str,
     model_name: str,
-):
-    return 1
+    n_examples_shown: int = 4,
+) -> float:
+    record = copy.copy(delphi_record)
+    record.explanation = explanation["description"]
+    fuzz = asyncio.run(
+        _run_delphi_fuzz(
+            record,
+            openrouter_api_key,
+            model_name,
+            n_examples_shown=n_examples_shown,
+        )
+    )
+    return _recall(fuzz)
 
