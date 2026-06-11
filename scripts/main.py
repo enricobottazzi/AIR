@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_pool, generate_explanations_chair, generate_explanations_neuronpedia, get_baseline, score_explanation
+from utils import build_delphi_record, build_pool, delphi_fuzz_scorer, generate_explanations_chair, generate_explanations_neuronpedia, get_baseline
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -84,14 +84,28 @@ def generate_explanations(
 def postprocess_explanations(experiment_dir: Path):
     pass
 
-def score_explanations(experiment_dir: Path, openrouter_api_key: str, model_name: str, score_types: list[str]):
-    for feature_path in experiment_dir.glob("*.json"):
+def score_explanations(
+    experiment_dir: Path,
+    openrouter_api_key: str,
+    model_name: str,
+):
+    feature_paths = sorted(experiment_dir.glob("*.json"))
+    for feature_path in feature_paths:
         feat = json.loads(feature_path.read_text())
+        delphi_record = build_delphi_record(
+            experiment_dir,
+            feature_path,
+        )
         for explanation in feat.get("explanations", []):
-            score = score_explanation(experiment_dir, openrouter_api_key, f"google/{model_name}", score_types)
+            score = delphi_fuzz_scorer(
+                delphi_record,
+                explanation,
+                openrouter_api_key,
+                f"google/{model_name}",
+            )
             explanation.setdefault("scores", []).append({
                 "value": score,
-                "explanationScoreTypeName": score_type,
+                "explanationScoreTypeName": "delphi_fuzz",
                 "explanationScoreModelName": f"google/{model_name}"
             })
         feature_path.write_text(json.dumps(feat, indent=2))
@@ -132,7 +146,6 @@ def main():
     ]
     EXPLANATION_MODEL_NAME = "gemini-2.5-flash-lite"
     NEURONPEDIA_EXPLANATION_TYPES = ["np_max-act-logits", "oai_token-act-pair"]
-    SCORE_TYPES = ["fuzz"]
     
     NEURONPEDIA_API_KEY = os.environ.get("NEURONPEDIA_API_KEY", "")
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -156,16 +169,16 @@ def main():
     # print("4. Generating correlation scores...")
     # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # 5. Generate the explanation
-    print("5. Generating explanations...")
-    generate_explanations(
-        experiment_dir,
-        NEURONPEDIA_API_KEY,
-        OPENROUTER_API_KEY,
-        EXPLANATION_MODEL_NAME,
-        NEURONPEDIA_EXPLANATION_TYPES,
-        [c[0] for c in CHANNEL_SPECS]
-    )
+    # # 5. Generate the explanation
+    # print("5. Generating explanations...")
+    # generate_explanations(
+    #     experiment_dir,
+    #     NEURONPEDIA_API_KEY,
+    #     OPENROUTER_API_KEY,
+    #     EXPLANATION_MODEL_NAME,
+    #     NEURONPEDIA_EXPLANATION_TYPES,
+    #     [c[0] for c in CHANNEL_SPECS]
+    # )
 
     # # 6. Postprocess the explanations
     # print("6. Postprocessing explanations...")
@@ -173,7 +186,11 @@ def main():
 
     # 7. Score the explanations
     print("7. Scoring explanations...")
-    score_explanations(experiment_dir, OPENROUTER_API_KEY, EXPLANATION_MODEL_NAME, SCORE_TYPES)
+    score_explanations(
+        experiment_dir,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+    )
 
     # 8. Aggregate data in csv and illustrations
     print("8. Aggregating data...")

@@ -1,7 +1,10 @@
 import json
+import random
 import urllib.request
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
+import torch
+from delphi.latents import ActivatingExample, Latent, LatentRecord, NonActivatingExample
 
 from src.correlation_score import gen_baseline
 from src.llm import ExplainerSetup, complete
@@ -97,6 +100,74 @@ def generate_explanations_chair(experiment_dir: Path, api_key: str, model_name: 
 
     print(f"Generated {generated} CHAIR explanations.")
 
-def score_explanation(experiment_dir: Path, openrouter_api_key: str, model_name: str, score_types: list[str]):
+def _example_tensors(activation: dict):
+    values = activation["values"]
+    return (
+        torch.zeros(len(values), dtype=torch.long),
+        torch.tensor(values, dtype=torch.float32),
+        activation["tokens"],
+    )
+
+def _activating_example(activation: dict) -> ActivatingExample:
+    tokens, activations, str_tokens = _example_tensors(activation)
+    return ActivatingExample(
+        tokens=tokens,
+        activations=activations,
+        str_tokens=str_tokens,
+    )
+
+def _non_activating_example(activation: dict) -> NonActivatingExample:
+    tokens, activations, str_tokens = _example_tensors(activation)
+    return NonActivatingExample(
+        tokens=tokens,
+        activations=activations,
+        str_tokens=str_tokens,
+        distance=-1.0,
+    )
+
+def build_delphi_record(
+    experiment_dir: Path,
+    target_feature_path: Path,
+    seed: int = 42,
+    n_positive: int = 10,
+    n_negative: int = 10,
+) -> LatentRecord:
+    experiment_dir = Path(experiment_dir)
+    target_feature_path = Path(target_feature_path).resolve()
+    feature_paths = sorted(path.resolve() for path in experiment_dir.glob("*.json"))
+    
+    target_feature = json.loads(target_feature_path.read_text())
+    negative_features = [
+        json.loads(path.read_text()) for path in feature_paths if path != target_feature_path
+    ]
+
+    positive_pool = []
+    for activation in target_feature["activations"]:
+        positive_pool.append(_activating_example(activation))
+
+    negative_pool = []
+    for feature in negative_features:
+        for activation in feature["activations"]:
+            negative_pool.append(_non_activating_example(activation))
+
+    if len(positive_pool) < n_positive:
+        raise ValueError(f"Need {n_positive} positive activations, found {len(positive_pool)}")
+    if len(negative_pool) < n_negative:
+        raise ValueError(f"Need {n_negative} negative activations, found {len(negative_pool)}")
+
+    rng = random.Random(seed)
+    record = LatentRecord(
+        latent=Latent(target_feature["layer"], int(target_feature["index"]))
+    )
+    record.test = rng.sample(positive_pool, n_positive)
+    record.not_active = rng.sample(negative_pool, n_negative)
+    return record
+
+def delphi_fuzz_scorer(
+    delphi_record: LatentRecord,
+    explanation: dict,
+    openrouter_api_key: str,
+    model_name: str,
+):
     return 1
 
