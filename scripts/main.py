@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_delphi_record, build_pool, delphi_fuzz_scorer, generate_explanations_air, generate_explanations_neuronpedia, get_baseline
+from utils import build_delphi_record, build_pool, delphi_fuzz_scorer, generate_explanations_air, generate_explanations_neuronpedia, get_baseline, write_correlation_matrix_csv, write_explanations_matrix_csv, write_feature_score_matrix_csv
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -150,8 +150,13 @@ def score_explanations(
             })
         feature_path.write_text(json.dumps(feat, indent=2))
 
-def aggregate_data(experiment_dir: Path):
-    pass
+def aggregate_data(experiment_dir: Path, neuronpedia_explanation_types: list[str], embedder_ids: list[str]):
+    write_explanations_matrix_csv(experiment_dir)
+    write_correlation_matrix_csv(experiment_dir)
+    write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids)
+    write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids, air_type_prefix="postprocessed_air", out_name="feature_score_matrix_postprocessed.csv")
+    write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids, out_name="feature_score_matrix_filtered.csv", filtered=True)
+    write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids, air_type_prefix="postprocessed_air", out_name="feature_score_matrix_postprocessed_filtered.csv", filtered=True)
 
 def main():
     parser = argparse.ArgumentParser(description="Unified pipeline for feature fetching, explanation generation, and scoring.")
@@ -209,32 +214,32 @@ def main():
     # print("4. Generating correlation scores...")
     # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # 5. Generate the explanation
-    print("5. Generating explanations...")
-    generate_explanations(
-        experiment_dir,
-        NEURONPEDIA_API_KEY,
-        OPENROUTER_API_KEY,
-        EXPLANATION_MODEL_NAME,
-        NEURONPEDIA_EXPLANATION_TYPES,
-        [c[0] for c in CHANNEL_SPECS]
-    )
+    # # 5. Generate the explanation
+    # print("5. Generating explanations...")
+    # generate_explanations(
+    #     experiment_dir,
+    #     NEURONPEDIA_API_KEY,
+    #     OPENROUTER_API_KEY,
+    #     EXPLANATION_MODEL_NAME,
+    #     NEURONPEDIA_EXPLANATION_TYPES,
+    #     [c[0] for c in CHANNEL_SPECS]
+    # )
 
-    # 6. Postprocess the explanations
-    print("6. Postprocessing explanations...")
-    postprocess_explanations(experiment_dir, CHANNEL_SPECS)
+    # # 6. Postprocess the explanations
+    # print("6. Postprocessing explanations...")
+    # postprocess_explanations(experiment_dir, CHANNEL_SPECS)
 
-    # 7. Score the explanations
-    print("7. Scoring explanations...")
-    score_explanations(
-        experiment_dir,
-        OPENROUTER_API_KEY,
-        EXPLANATION_MODEL_NAME,
-    )
+    # # 7. Score the explanations
+    # print("7. Scoring explanations...")
+    # score_explanations(
+    #     experiment_dir,
+    #     OPENROUTER_API_KEY,
+    #     EXPLANATION_MODEL_NAME,
+    # )
 
-    # # 8. Aggregate data in csv and illustrations
-    # print("8. Aggregating data...")
-    # aggregate_data(experiment_dir)
+    # 8. Aggregate data in csv and illustrations
+    print("8. Aggregating data...")
+    aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
     
     # print("Pipeline completed.")
 
