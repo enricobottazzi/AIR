@@ -1,4 +1,4 @@
-# ITL
+# AIR (Auto-Interpretability Router)
 
 ### Setup
 

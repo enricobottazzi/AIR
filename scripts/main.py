@@ -153,24 +153,24 @@ def main():
     EMBEDDERS = [
         "all-MiniLM-L6-v2",
         "all-mpnet-base-v2",
-        # "BAAI/bge-small-en-v1.5",
-        # "Qwen/Qwen3-Embedding-0.6B",
-        # "BAAI/bge-m3",
-        # "intfloat/multilingual-e5-large-instruct",
-        # "google/embeddinggemma-300m",
-        # "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-        # "sentence-transformers/LaBSE",
+        "BAAI/bge-small-en-v1.5",
+        "Qwen/Qwen3-Embedding-0.6B",
+        "BAAI/bge-m3",
+        "intfloat/multilingual-e5-large-instruct",
+        "google/embeddinggemma-300m",
+        "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+        "sentence-transformers/LaBSE",
     ]
     
     CHANNEL_SPECS = [
         ("act_token",        lambda f: preprocess_acts(f, window=(0, 0)),    "the feature activates on tokens matching"),
         ("before_act_token", lambda f: preprocess_acts(f, window=(-1, -1)),  "the token immediately before activation is"),
-        # ("after_act_token",  lambda f: preprocess_acts(f, window=(1, 1)),    "the token immediately after activation is"),
-        # ("positive_logits",  lambda f: preprocess_logits(f, positive=True),  "the feature promotes next-token predictions for"),
-        # ("negative_logits",  lambda f: preprocess_logits(f, positive=False), "the feature suppresses next-token predictions for"),
-        # ("short_window",     lambda f: preprocess_acts(f, window=(-1, 1)),   "within one token of activation, the context contains"),
-        # ("medium_window",    lambda f: preprocess_acts(f, window=(-10, 10)), "within ten tokens of activation, the context contains"),
-        # ("long_window",      lambda f: preprocess_acts(f, window=(-25, 25)), "within twenty-five tokens of activation, the context contains"),
+        ("after_act_token",  lambda f: preprocess_acts(f, window=(1, 1)),    "the token immediately after activation is"),
+        ("positive_logits",  lambda f: preprocess_logits(f, positive=True),  "the feature promotes next-token predictions for"),
+        ("negative_logits",  lambda f: preprocess_logits(f, positive=False), "the feature suppresses next-token predictions for"),
+        ("short_window",     lambda f: preprocess_acts(f, window=(-1, 1)),   "within one token of activation, the context contains"),
+        ("medium_window",    lambda f: preprocess_acts(f, window=(-10, 10)), "within ten tokens of activation, the context contains"),
+        ("long_window",      lambda f: preprocess_acts(f, window=(-25, 25)), "within twenty-five tokens of activation, the context contains"),
     ]
     EXPLANATION_MODEL_NAME = "gemini-2.5-flash-lite"
     NEURONPEDIA_EXPLANATION_TYPES = ["np_max-act-logits", "oai_token-act-pair"]
@@ -183,30 +183,30 @@ def main():
 
     # 1. Sample the features
     print("1. Sampling features...")
-    # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
+    sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
 
     # 2. Preprocess the features
     print("2. Preprocessing features...")
-    # preprocess_features(experiment_dir, CHANNEL_SPECS)
+    preprocess_features(experiment_dir, CHANNEL_SPECS)
 
     # 3. Preprocess the embedders
     print("3. Preprocessing embedders...")
-    # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
     # 4. Generate correlation scores
     print("4. Generating correlation scores...")
-    # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
     # 5. Generate the explanation
     print("5. Generating explanations...")
-    # generate_explanations(
-    #     experiment_dir,
-    #     NEURONPEDIA_API_KEY,
-    #     OPENROUTER_API_KEY,
-    #     EXPLANATION_MODEL_NAME,
-    #     NEURONPEDIA_EXPLANATION_TYPES,
-    #     [c[0] for c in CHANNEL_SPECS]
-    # )
+    generate_explanations(
+        experiment_dir,
+        NEURONPEDIA_API_KEY,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+        NEURONPEDIA_EXPLANATION_TYPES,
+        [c[0] for c in CHANNEL_SPECS]
+    )
 
     # 6. Postprocess the explanations
     print("6. Postprocessing explanations...")
@@ -220,9 +220,9 @@ def main():
         EXPLANATION_MODEL_NAME,
     )
 
-    # # 8. Aggregate data in csv and illustrations
-    # print("8. Aggregating data...")
-    # aggregate_data(experiment_dir)
+    # 8. Aggregate data in csv and illustrations
+    print("8. Aggregating data...")
+    aggregate_data(experiment_dir)
     
     print("Pipeline completed.")
 
