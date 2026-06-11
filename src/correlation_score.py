@@ -1,16 +1,23 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-def _prefixed(examples: list[str], model: SentenceTransformer) -> list[str]:
-    # E5-instruct expects "query: " on inputs; use it on all sides for symmetric similarity.
-    name = str(getattr(model, "model_name", "")).lower()
-    if "e5" in name and "instruct" in name:
-        return [f"query: {x}" for x in examples]
-    return examples
+# Prepended (symmetrically) for instruction-tuned embedders that ship no task
+# prompt of their own. Phrased for symmetric similarity, not retrieval.
+_INSTRUCTION = "Instruct: Retrieve semantically similar text.\nQuery: "
 
-def embed(examples: list[str], model: SentenceTransformer):
+def _prompt(model: SentenceTransformer, model_id: str) -> str | None:
+    # Follow each model's own convention, matched to our symmetric-similarity task.
+    prompts = getattr(model, "prompts", None) or {}
+    for name in ("STS", "PairClassification", "Clustering"):  # symmetric prompts, if shipped
+        if prompts.get(name):
+            return prompts[name]
+    if "instruct" in model_id.lower() or "qwen3-embedding" in model_id.lower():
+        return _INSTRUCTION
+    return None  # models trained without prompts -> raw text
+
+def embed(examples: list[str], model: SentenceTransformer, model_id: str = ""):
     # Encode example strings (as returned by explain_acts / explain_logits).
-    return model.encode(_prefixed(examples, model))
+    return model.encode(examples, prompt=_prompt(model, model_id))
 
 def _unit(emb):
     E = np.asarray(emb, float)
@@ -28,10 +35,10 @@ def gen_raw_scores(emb, pool_centroid, w=None) -> tuple[float, float]:
     E = _unit(emb)
     return _mean_pair_sim(E, w), float(np.average(E @ pool_centroid, weights=w))
 
-def gen_baseline(model, pool: list[str], n: int, trials: int = 200, seed: int = 0) -> tuple[float, float, float, float, list[float]]:
+def gen_baseline(model, pool: list[str], n: int, trials: int = 200, seed: int = 0, model_id: str = "") -> tuple[float, float, float, float, list[float]]:
     """Chance-level (intra_mu, intra_sd, inter_mu, inter_sd, centroid) for `n` unrelated examples."""
     rng = np.random.default_rng(seed)
-    P = _unit(embed(pool, model))
+    P = _unit(embed(pool, model, model_id))
     centroid = _unit([P.mean(axis=0)])[0]
     scores = [gen_raw_scores(P[rng.choice(len(P), n, replace=False)], centroid) for _ in range(trials)]
     intra, inter = zip(*scores)

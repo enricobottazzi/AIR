@@ -64,7 +64,7 @@ def generate_correlation_scores(experiment_dir: Path, embedder_ids: list, channe
                 
                 channel_data = feat["channels"][channel_id]
                 score = gen_normalized_correlation_score(
-                    embed(channel_data["examples"], embedder_model), 
+                    embed(channel_data["examples"], embedder_model, embedder_id), 
                     baseline, 
                     w=channel_data["weights"]
                 )
