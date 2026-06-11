@@ -17,12 +17,15 @@ def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, m
     saved = 0
     while saved < n:
         layer, index = random.randint(0, 61), random.randint(0, 262143)
+        out = experiment_dir / f"{model_id}_{layer}_{index}.json"
+        if out.exists():
+            continue
         req = urllib.request.Request(f"https://www.neuronpedia.org/api/feature/{model_id}/{layer}-gemmascope-2-transcoder-262k/{index}", headers={"x-api-key": api_key})
         feat = json.load(urllib.request.urlopen(req))
         if sum(1 for a in feat.get("activations", []) if a.get("maxValue", 0) > 0) >= min_acts:
-            (experiment_dir / f"{model_id}_{layer}_{index}.json").write_text(json.dumps(feat, indent=2))
+            out.write_text(json.dumps(feat, indent=2))
             saved += 1
-            print(f"Saved {model_id}_{layer}_{index}.json")
+            print(f"Saved {out.name}")
 
 def preprocess_features(experiment_dir: Path, channel_specs: list):
     for feature_path in experiment_dir.glob("*.json"):

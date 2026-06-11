@@ -189,7 +189,7 @@ async def _run_delphi_fuzz(
     finally:
         await client.client.aclose()
 
-def _recall(fuzz) -> float:
+def _accuracy(fuzz) -> float:
     correct = [score.correct for score in fuzz.score if score.correct is not None]
     if not correct:
         raise ValueError("Delphi fuzz scorer returned no valid predictions")
@@ -212,7 +212,7 @@ def delphi_fuzz_scorer(
             n_examples_shown=n_examples_shown,
         )
     )
-    return _recall(fuzz)
+    return _accuracy(fuzz)
 
 def write_explanations_matrix_csv(experiment_dir: Path, score_type_name: str = "delphi_fuzz") -> Path:
     """Rows: feature IDs. Columns: each explanation typeName with two subfields (description, score)."""
