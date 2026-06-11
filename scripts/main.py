@@ -89,27 +89,31 @@ def postprocess_explanations(experiment_dir: Path, channel_specs: list):
 
     for feature_path in sorted(experiment_dir.glob("*.json")):
         feat = json.loads(feature_path.read_text())
-        changed = False
+        explanations = feat.get("explanations", [])
+        existing_types = {e.get("typeName") for e in explanations}
+        new_explanations = []
 
-        for explanation in feat.get("explanations", []):
+        for explanation in explanations:
             type_name = explanation.get("typeName", "")
             if not type_name.startswith("air_"):
                 continue
 
             channel_id = type_name.removeprefix("air_")
             prefix = air_description_prefixes.get(channel_id)
-            if not prefix:
+            postprocessed_type = f"postprocessed_{type_name}"
+            if not prefix or postprocessed_type in existing_types:
                 continue
 
-            prefixed_description = f"{prefix}:"
-            description = explanation["description"]
-            if description.startswith(prefixed_description):
-                continue
+            new_explanations.append({
+                **explanation,
+                "id": None,
+                "typeName": postprocessed_type,
+                "description": f'{prefix} "{explanation["description"]}"',
+                "scores": [],
+            })
 
-            explanation["description"] = f"{prefixed_description} {description}"
-            changed = True
-
-        if changed:
+        if new_explanations:
+            explanations.extend(new_explanations)
             feature_path.write_text(json.dumps(feat, indent=2))
 
 def score_explanations(
@@ -205,20 +209,20 @@ def main():
     # print("4. Generating correlation scores...")
     # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 5. Generate the explanation
-    # print("5. Generating explanations...")
-    # generate_explanations(
-    #     experiment_dir,
-    #     NEURONPEDIA_API_KEY,
-    #     OPENROUTER_API_KEY,
-    #     EXPLANATION_MODEL_NAME,
-    #     NEURONPEDIA_EXPLANATION_TYPES,
-    #     [c[0] for c in CHANNEL_SPECS]
-    # )
+    # 5. Generate the explanation
+    print("5. Generating explanations...")
+    generate_explanations(
+        experiment_dir,
+        NEURONPEDIA_API_KEY,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+        NEURONPEDIA_EXPLANATION_TYPES,
+        [c[0] for c in CHANNEL_SPECS]
+    )
 
-    # # 6. Postprocess the explanations
-    # print("6. Postprocessing explanations...")
-    # postprocess_explanations(experiment_dir, CHANNEL_SPECS)
+    # 6. Postprocess the explanations
+    print("6. Postprocessing explanations...")
+    postprocess_explanations(experiment_dir, CHANNEL_SPECS)
 
     # 7. Score the explanations
     print("7. Scoring explanations...")
