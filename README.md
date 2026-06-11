@@ -9,16 +9,10 @@ pip install -e .
 
 Set `NEURONPEDIA_API_KEY` and `OPENROUTER_API_KEY` in `.env`.
 
-### Scripts
-
-1. Fetch features from Neuronpedia API
+Run 
 
 ```bash
-python scripts/fetch_features.py
+python scripts/main.py data/experiments/2026-06-11
 ```
 
-2. Generate an explanation for a feature via OpenRouter
-
-```bash
-python scripts/gen_explanation_input.py
-```
+Where `data/experiments/2026-06-11` is the directory to store the experiment data.

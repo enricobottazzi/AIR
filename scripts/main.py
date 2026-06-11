@@ -29,7 +29,7 @@ def preprocess_features(experiment_dir: Path, channel_specs: list):
         feat = json.loads(feature_path.read_text())
             
         feat["channels"] = {}
-        for channel_id, recipe in channel_specs:
+        for channel_id, recipe, _ in channel_specs:
             prompt, examples, weights = recipe(feat)
             feat["channels"][channel_id] = {
                 "prompt": prompt,
@@ -81,8 +81,36 @@ def generate_explanations(
     generate_explanations_neuronpedia(experiment_dir, neuronpedia_api_key, model_name, neuronpedia_explanation_types)
     generate_explanations_chair(experiment_dir, openrouter_api_key, f"google/{model_name}", channel_ids)
 
-def postprocess_explanations(experiment_dir: Path):
-    pass
+def postprocess_explanations(experiment_dir: Path, channel_specs: list):
+    chair_description_prefixes = {
+        channel_id: chair_prefix
+        for channel_id, _, chair_prefix in channel_specs
+    }
+
+    for feature_path in sorted(experiment_dir.glob("*.json")):
+        feat = json.loads(feature_path.read_text())
+        changed = False
+
+        for explanation in feat.get("explanations", []):
+            type_name = explanation.get("typeName", "")
+            if not type_name.startswith("chair_"):
+                continue
+
+            channel_id = type_name.removeprefix("chair_")
+            prefix = chair_description_prefixes.get(channel_id)
+            if not prefix:
+                continue
+
+            prefixed_description = f"{prefix}:"
+            description = explanation["description"]
+            if description.startswith(prefixed_description):
+                continue
+
+            explanation["description"] = f"{prefixed_description} {description}"
+            changed = True
+
+        if changed:
+            feature_path.write_text(json.dumps(feat, indent=2))
 
 def score_explanations(
     experiment_dir: Path,
@@ -135,14 +163,14 @@ def main():
     ]
     
     CHANNEL_SPECS = [
-        ("act_token",       lambda f: preprocess_acts(f, window=(0, 0))),
-        ("before_act_token",lambda f: preprocess_acts(f, window=(-1, -1))),
-        # ("after_act_token", lambda f: preprocess_acts(f, window=(1, 1))),
-        # ("positive_logits", lambda f: preprocess_logits(f, positive=True)),
-        # ("negative_logits", lambda f: preprocess_logits(f, positive=False)),
-        # ("short_window",    lambda f: preprocess_acts(f, window=(-1, 1))),
-        # ("medium_window",   lambda f: preprocess_acts(f, window=(-10, 10))),
-        # ("long_window",     lambda f: preprocess_acts(f, window=(-25, 25))),
+        ("act_token",        lambda f: preprocess_acts(f, window=(0, 0)),    "the feature activates on tokens matching"),
+        ("before_act_token", lambda f: preprocess_acts(f, window=(-1, -1)),  "the token immediately before activation is"),
+        # ("after_act_token",  lambda f: preprocess_acts(f, window=(1, 1)),    "the token immediately after activation is"),
+        # ("positive_logits",  lambda f: preprocess_logits(f, positive=True),  "the feature promotes next-token predictions for"),
+        # ("negative_logits",  lambda f: preprocess_logits(f, positive=False), "the feature suppresses next-token predictions for"),
+        # ("short_window",     lambda f: preprocess_acts(f, window=(-1, 1)),   "within one token of activation, the context contains"),
+        # ("medium_window",    lambda f: preprocess_acts(f, window=(-10, 10)), "within ten tokens of activation, the context contains"),
+        # ("long_window",      lambda f: preprocess_acts(f, window=(-25, 25)), "within twenty-five tokens of activation, the context contains"),
     ]
     EXPLANATION_MODEL_NAME = "gemini-2.5-flash-lite"
     NEURONPEDIA_EXPLANATION_TYPES = ["np_max-act-logits", "oai_token-act-pair"]
@@ -153,24 +181,24 @@ def main():
     N_FEATURES = 50
     MIN_NONZERO_ACTIVATIONS = 20
 
-    # # 1. Sample the features
-    # print("1. Sampling features...")
+    # 1. Sample the features
+    print("1. Sampling features...")
     # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
 
-    # # 2. Preprocess the features
-    # print("2. Preprocessing features...")
+    # 2. Preprocess the features
+    print("2. Preprocessing features...")
     # preprocess_features(experiment_dir, CHANNEL_SPECS)
 
-    # # 3. Preprocess the embedders
-    # print("3. Preprocessing embedders...")
+    # 3. Preprocess the embedders
+    print("3. Preprocessing embedders...")
     # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 4. Generate correlation scores
-    # print("4. Generating correlation scores...")
+    # 4. Generate correlation scores
+    print("4. Generating correlation scores...")
     # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 5. Generate the explanation
-    # print("5. Generating explanations...")
+    # 5. Generate the explanation
+    print("5. Generating explanations...")
     # generate_explanations(
     #     experiment_dir,
     #     NEURONPEDIA_API_KEY,
@@ -180,9 +208,9 @@ def main():
     #     [c[0] for c in CHANNEL_SPECS]
     # )
 
-    # # 6. Postprocess the explanations
-    # print("6. Postprocessing explanations...")
-    # postprocess_explanations(experiment_dir)
+    # 6. Postprocess the explanations
+    print("6. Postprocessing explanations...")
+    postprocess_explanations(experiment_dir, CHANNEL_SPECS)
 
     # 7. Score the explanations
     print("7. Scoring explanations...")
@@ -192,9 +220,9 @@ def main():
         EXPLANATION_MODEL_NAME,
     )
 
-    # 8. Aggregate data in csv and illustrations
-    print("8. Aggregating data...")
-    aggregate_data(experiment_dir)
+    # # 8. Aggregate data in csv and illustrations
+    # print("8. Aggregating data...")
+    # aggregate_data(experiment_dir)
     
     print("Pipeline completed.")
 
