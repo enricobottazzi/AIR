@@ -104,24 +104,28 @@ def generate_explanations_air(experiment_dir: Path, api_key: str, model_name: st
 
     print(f"Generated {generated} AIR explanations.")
 
-def _example_tensors(activation: dict):
-    values = activation["values"]
+def _example_tensors(activation: dict, ctx_len: int):
+    tokens, values = activation["tokens"], activation["values"]
+    if len(tokens) > ctx_len:
+        # Center a ctx_len window on the peak token, clamped to bounds.
+        start = min(max(0, activation["maxValueTokenIndex"] - ctx_len // 2), len(tokens) - ctx_len)
+        tokens, values = tokens[start:start + ctx_len], values[start:start + ctx_len]
     return (
         torch.zeros(len(values), dtype=torch.long),
         torch.tensor(values, dtype=torch.float32),
-        activation["tokens"],
+        tokens,
     )
 
-def _activating_example(activation: dict) -> ActivatingExample:
-    tokens, activations, str_tokens = _example_tensors(activation)
+def _activating_example(activation: dict, ctx_len: int) -> ActivatingExample:
+    tokens, activations, str_tokens = _example_tensors(activation, ctx_len)
     return ActivatingExample(
         tokens=tokens,
         activations=activations,
         str_tokens=str_tokens,
     )
 
-def _non_activating_example(activation: dict) -> NonActivatingExample:
-    tokens, activations, str_tokens = _example_tensors(activation)
+def _non_activating_example(activation: dict, ctx_len: int) -> NonActivatingExample:
+    tokens, activations, str_tokens = _example_tensors(activation, ctx_len)
     return NonActivatingExample(
         tokens=tokens,
         activations=activations,
@@ -135,6 +139,7 @@ def build_delphi_record(
     seed: int = 42,
     n_positive: int = 10,
     n_negative: int = 10,
+    example_ctx_len: int = 32,
 ) -> LatentRecord:
     experiment_dir = Path(experiment_dir)
     target_feature_path = Path(target_feature_path).resolve()
@@ -147,12 +152,12 @@ def build_delphi_record(
 
     positive_pool = []
     for activation in target_feature["activations"]:
-        positive_pool.append(_activating_example(activation))
+        positive_pool.append(_activating_example(activation, example_ctx_len))
 
     negative_pool = []
     for feature in negative_features:
         for activation in feature["activations"]:
-            negative_pool.append(_non_activating_example(activation))
+            negative_pool.append(_non_activating_example(activation, example_ctx_len))
 
     if len(positive_pool) < n_positive:
         raise ValueError(f"Need {n_positive} positive activations, found {len(positive_pool)}")
@@ -171,7 +176,7 @@ async def _run_delphi_fuzz(
     delphi_record: LatentRecord,
     openrouter_api_key: str,
     model_name: str,
-    n_examples_shown: int = 4,
+    n_examples_shown: int = 5,
 ):
     client = OpenRouter(model_name, api_key=openrouter_api_key)
     try:
@@ -194,7 +199,7 @@ def delphi_fuzz_scorer(
     explanation: dict,
     openrouter_api_key: str,
     model_name: str,
-    n_examples_shown: int = 4,
+    n_examples_shown: int = 5,
 ) -> float:
     record = copy.copy(delphi_record)
     record.explanation = explanation["description"]
