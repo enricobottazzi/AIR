@@ -308,3 +308,55 @@ def gen_accuracy_score_by_protocol_csv(experiment_dir: Path, results_dir: Path, 
         w.writerows(rows)
         cols = zip(*(r[1:] for r in rows))
         w.writerow(["average", *(sum(v) / len(v) if (v := [x for x in c if x != ""]) else "" for c in cols)])
+
+def tabulate_accuracy_score_by_protocol(csv_path: Path):
+    """Write a markdown table per air family (+ neuronpedia baselines) of the average accuracy per protocol."""
+    rows = list(csv.reader(csv_path.read_text().splitlines()))
+    protocols, averages = rows[0][1:], rows[-1][1:]
+    value = dict(zip(protocols, averages))
+
+    def family_of(col: str):
+        return next((fam for fam in ("air_postprocessed_filtered", "air_postprocessed", "air_filtered", "air") if col.startswith(fam + "_")), None)
+
+    np_cols = [p for p in protocols if family_of(p) is None]
+    best_np = max(float(value[c]) for c in np_cols)
+    out_dir = csv_path.parent / "accuracy_score_by_protocol_tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for fam in ("air", "air_postprocessed", "air_filtered", "air_postprocessed_filtered"):
+        cols = [c for c in [*np_cols, *(p for p in protocols if family_of(p) == fam)] if value[c] != ""]
+        body = [f"| {c}{' *' if family_of(c) and float(value[c]) >= best_np else ''} | {float(value[c]):.3f} |" for c in cols]
+        lines = ["| protocol | accuracy |", "| --- | --- |", *body]
+        (out_dir / f"accuracy_score_by_protocol_{fam}.md").write_text("\n".join(lines) + "\n")
+
+def plot_best_protocol_summary(csv_path: Path):
+    """PNG bar chart: neuronpedia protocols + each air family's best score across embedders, annotated with the chosen embedder."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    rows = list(csv.reader(csv_path.read_text().splitlines()))
+    protocols, averages = rows[0][1:], rows[-1][1:]
+    value = {p: float(a) for p, a in zip(protocols, averages) if a != ""}
+
+    def family_of(col: str):
+        return next((fam for fam in ("air_postprocessed_filtered", "air_postprocessed", "air_filtered", "air") if col.startswith(fam + "_")), None)
+
+    np_cols = [p for p in protocols if family_of(p) is None]
+    families = ("air", "air_postprocessed", "air_filtered", "air_postprocessed_filtered")
+    best = {fam: max((p for p in protocols if family_of(p) == fam and p in value), key=value.get) for fam in families}
+    labels = [*np_cols, *families]
+    scores = [*(value[c] for c in np_cols), *(value[best[fam]] for fam in families)]
+    colors = [*["tab:orange"] * len(np_cols), *["tab:blue"] * len(families)]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(range(len(labels)), scores, color=colors)
+    for i, fam in enumerate(families):
+        ax.text(len(np_cols) + i, 0.51, best[fam].removeprefix(fam + "_"), rotation=90, va="bottom", ha="center", color="white", fontsize=8)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    ax.set_ylim(0.5, 1.0)
+    ax.set_ylabel("accuracy")
+    ax.set_title("best protocol per family")
+    fig.savefig(csv_path.parent / "accuracy_score_by_protocol_best.png", bbox_inches="tight")
+    plt.close(fig)
