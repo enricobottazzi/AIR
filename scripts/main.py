@@ -14,7 +14,7 @@ from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scor
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
-    saved = 0
+    saved = sum(1 for _ in experiment_dir.glob("*.json"))
     while saved < n:
         layer, index = random.randint(0, 61), random.randint(0, 262143)
         out = experiment_dir / f"{model_id}_{layer}_{index}.json"
@@ -154,6 +154,7 @@ def score_explanations(
                 explanation,
                 openrouter_api_key,
                 score_model_name,
+                step="score",
                 feature_id=feature_path.stem,
                 typeName=explanation.get("typeName")
             )
@@ -218,7 +219,7 @@ def main():
 
     # # 1. Sample the features
     # print("1. Sampling features...")
-    # # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
+    # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
 
     # # 2. Preprocess the features
     # print("2. Preprocessing features...")
@@ -228,7 +229,7 @@ def main():
     # print("3. Preprocessing embedders...")
     # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # 4. Generate correlation scores
+    # # 4. Generate correlation scores
     # print("4. Generating correlation scores...")
     # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
@@ -267,11 +268,11 @@ def main():
     # print("7.1. Checking data sanity...")
     # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
 
-    # 8. Aggregate data in csv and illustrations
-    print("8. Aggregating data...")
-    aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
+    # # 8. Aggregate data in csv and illustrations
+    # print("8. Aggregating data...")
+    # aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
     
-    print("Pipeline completed.")
+    # print("Pipeline completed.")
 
 if __name__ == "__main__":
     main()

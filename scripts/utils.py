@@ -94,7 +94,7 @@ def generate_explanations_air(experiment_dir: Path, api_key: str, model_name: st
             type_name = f"air_{channel_id}"
             explanations.append({
                 "id": None,
-                "description": complete(setup, feat["channels"][channel_id]["prompt"], api_key, feature_id=feature_path.stem, typeName=type_name).strip(),
+                "description": complete(setup, feat["channels"][channel_id]["prompt"], api_key, step="explain", feature_id=feature_path.stem, typeName=type_name).strip(),
                 "explanationModelName": model_name,
                 "typeName": type_name,
                 "scores": [],
