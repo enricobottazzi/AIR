@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, generate_explanations_air, generate_explanations_neuronpedia, get_baseline, plot_feature_score_matrix, write_correlation_matrix_csv, write_explanations_matrix_csv, write_feature_score_matrix_csv
+from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, gen_feature_correlation_scores_csv, gen_feature_accuracy_scores_csv, generate_explanations_air, generate_explanations_neuronpedia, get_baseline
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -165,13 +165,12 @@ def score_explanations(
         feature_path.write_text(json.dumps(feat, indent=2))
         print(f"Scored all explanations for feature {feature_path.stem}")
 
-def aggregate_data(experiment_dir: Path, neuronpedia_explanation_types: list[str], embedder_ids: list[str]):
-    write_explanations_matrix_csv(experiment_dir)
-    write_correlation_matrix_csv(experiment_dir)
-    plot_feature_score_matrix(write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids))
-    plot_feature_score_matrix(write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids, air_type_prefix="postprocessed_air", out_name="feature_score_matrix_postprocessed.csv"))
-    plot_feature_score_matrix(write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids, out_name="feature_score_matrix_filtered.csv", filtered=True))
-    plot_feature_score_matrix(write_feature_score_matrix_csv(experiment_dir, neuronpedia_explanation_types, embedder_ids, air_type_prefix="postprocessed_air", out_name="feature_score_matrix_postprocessed_filtered.csv", filtered=True))
+def aggregate_data(experiment_dir: Path):
+    results_dir = experiment_dir / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    for feature_path in sorted(experiment_dir.glob("*.json")):
+        gen_feature_correlation_scores_csv(feature_path, results_dir)
+        gen_feature_accuracy_scores_csv(feature_path, results_dir)
 
 def main():
     parser = argparse.ArgumentParser(description="Unified pipeline for feature fetching, explanation generation, and scoring.")
@@ -252,21 +251,21 @@ def main():
     # print("6.1. Checking data sanity...")
     # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
 
-    # 7. Score the explanations
-    print("7. Scoring explanations...")
-    score_explanations(
-        experiment_dir,
-        OPENROUTER_API_KEY,
-        EXPLANATION_MODEL_NAME,
-    )
+    # # 7. Score the explanations
+    # print("7. Scoring explanations...")
+    # score_explanations(
+    #     experiment_dir,
+    #     OPENROUTER_API_KEY,
+    #     EXPLANATION_MODEL_NAME,
+    # )
 
-    # 7.1 Data sanity check
-    print("7.1. Checking data sanity...")
-    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
+    # # 7.1 Data sanity check
+    # print("7.1. Checking data sanity...")
+    # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
 
-    # # 8. Aggregate data in csv and illustrations
-    # print("8. Aggregating data...")
-    # aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
+    # 8. Aggregate data in csv and illustrations
+    print("8. Aggregating data...")
+    aggregate_data(experiment_dir)
     
     print("Pipeline completed.")
 

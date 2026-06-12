@@ -235,113 +235,27 @@ def delphi_fuzz_scorer(
     )
     return _accuracy(fuzz)
 
-def write_explanations_matrix_csv(experiment_dir: Path, score_type_name: str = "delphi_fuzz") -> Path:
-    """Rows: feature IDs. Columns: each explanation typeName with two subfields (description, score)."""
-    features = [(p.stem, json.loads(p.read_text())) for p in sorted(experiment_dir.glob("*.json"))]
-    type_names = list(dict.fromkeys(e["typeName"] for _, f in features for e in f.get("explanations", [])))
+def gen_feature_correlation_scores_csv(feature_path: Path, results_dir: Path):
+    """Write this feature's channel (rows) x embedder (cols) correlation scores to results_dir/correlation_scores_by_feature; mark each embedder's top channel with ' *'."""
+    channels = json.loads(feature_path.read_text())["channels"]
+    embedders = list(next(iter(channels.values()))["scores"])
+    best = {e: max(d["scores"][e] for d in channels.values()) for e in embedders}
+    out_dir = results_dir / "correlation_scores_by_feature"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (out_dir / f"{feature_path.stem}.csv").open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["channel", *embedders])
+        for c, data in channels.items():
+            w.writerow([c, *(f"{s} *" if (s := data["scores"][e]) == best[e] else s for e in embedders)])
 
-    def cell(explanation: dict) -> list:
-        score = next((s["value"] for s in explanation["scores"] if s["explanationScoreTypeName"] == score_type_name), None)
-        return [explanation["description"], score]
-
-    results_dir = experiment_dir / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
-    out = results_dir / "explanations_matrix.csv"
-    with out.open("w", newline="") as fp:
-        w = csv.writer(fp)
-        w.writerow(["feature"] + [v for t in type_names for v in (t, "")])
-        w.writerow([""] + ["description", "score"] * len(type_names))
-        for feature_id, feat in features:
-            by_type = {e["typeName"]: e for e in feat.get("explanations", [])}
-            row = [feature_id]
-            for t in type_names:
-                row += cell(by_type[t]) if t in by_type else ["", ""]
-            w.writerow(row)
-    return out
-
-def write_correlation_matrix_csv(experiment_dir: Path) -> Path:
-    """Rows: embedder IDs. Columns: feature ID (top) x channel (sub). Cells: correlation score; per feature+embedder max is bolded with a star."""
-    features = [(p.stem, json.loads(p.read_text())) for p in sorted(experiment_dir.glob("*.json"))]
-    channels = list(dict.fromkeys(c for _, f in features for c in f.get("channels", {})))
-    embedders = list(dict.fromkeys(e for _, f in features for ch in f.get("channels", {}).values() for e in ch.get("scores", {})))
-
-    results_dir = experiment_dir / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
-    out = results_dir / "correlation_matrix.csv"
-    with out.open("w", newline="") as fp:
-        w = csv.writer(fp)
-        w.writerow(["embedder"] + [feature_id if i == 0 else "" for feature_id, _ in features for i in range(len(channels))])
-        w.writerow([""] + channels * len(features))
-        for embedder in embedders:
-            row = [embedder]
-            for _, feat in features:
-                cells = [feat.get("channels", {}).get(c, {}).get("scores", {}).get(embedder) for c in channels]
-                best = max((s for s in cells if s is not None), default=None)
-                row += [f"**{s}** *" if s is not None and s == best else ("" if s is None else s) for s in cells]
-            w.writerow(row)
-    return out
-
-def write_feature_score_matrix_csv(experiment_dir: Path, neuronpedia_explanation_types: list[str], embedder_ids: list[str], score_type_name: str = "delphi_fuzz", air_type_prefix: str = "air", out_name: str = "feature_score_matrix.csv", filtered: bool = False, min_correlation: float = 5.0) -> Path:
-    """Rows: feature IDs. Columns: neuronpedia explanation types + embedder IDs. Cells: delphi_fuzz score (for embedders, of the {air_type_prefix} explanation whose channel that embedder correlates with most). If filtered, embedder cells whose best channel correlates < min_correlation or is a (positive|negative)_logits channel are left empty."""
-    features = [(p.stem, json.loads(p.read_text())) for p in sorted(experiment_dir.glob("*.json"))]
-
-    def delphi_score(feat: dict, type_name: str):
-        e = next((e for e in feat.get("explanations", []) if e["typeName"] == type_name), None)
-        return next((s["value"] for s in e["scores"] if s["explanationScoreTypeName"] == score_type_name), "") if e else ""
-
-    def best_air_type(feat: dict, embedder: str):
-        scored = {c: ch["scores"][embedder] for c, ch in feat.get("channels", {}).items() if embedder in ch["scores"]}
-        if not scored:
-            return None
-        best = max(scored, key=scored.get)
-        if filtered and (scored[best] < min_correlation or best.endswith(("positive_logits", "negative_logits"))):
-            return None
-        return f"{air_type_prefix}_{best}"
-
-    columns = neuronpedia_explanation_types + embedder_ids
-    rows = []
-    for feature_id, feat in features:
-        values = [delphi_score(feat, t) for t in neuronpedia_explanation_types]
-        values += [delphi_score(feat, best_air_type(feat, emb)) for emb in embedder_ids]
-        rows.append((feature_id, values))
-
-    def average(j: int):
-        col = [v[j] for _, v in rows if v[j] != ""]
-        return sum(col) / len(col) if col else ""
-
-    results_dir = experiment_dir / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
-    out = results_dir / out_name
-    with out.open("w", newline="") as fp:
-        w = csv.writer(fp)
-        w.writerow(["feature"] + columns)
-        for feature_id, values in rows:
-            w.writerow([feature_id] + values)
-        w.writerow(["average"] + [average(j) for j in range(len(columns))])
-    return out
-
-def plot_feature_score_matrix(csv_path: Path, center: float = 0.5) -> Path:
-    """Diverging bar chart of the `average` row, centered at `center`:
-    models with average < center bar downward (negative), >= center bar upward."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    rows = list(csv.reader(csv_path.read_text().splitlines()))
-    header, average = rows[0][1:], rows[-1][1:]
-    labels, deltas = zip(*[(c, float(v) - center) for c, v in zip(header, average) if v != ""])
-
-    fig, ax = plt.subplots(figsize=(0.6 * len(labels) + 2, 6))
-    ax.bar(range(len(labels)), deltas, color=["#2a9d8f" if d >= 0 else "#e76f51" for d in deltas])
-    ax.axhline(0, color="black", lw=0.8)
-    ax.set_xticks(range(len(labels)), labels, rotation=45, ha="right")
-    ax.set_yticks(ax.get_yticks())
-    ax.set_yticklabels([f"{t + center:.2f}" for t in ax.get_yticks()])
-    ax.set_ylabel("average delphi_fuzz score")
-    ax.set_title(csv_path.stem)
-    fig.tight_layout()
-    out = csv_path.with_suffix(".png")
-    fig.savefig(out, dpi=150)
-    plt.close(fig)
-    return out
+def gen_feature_accuracy_scores_csv(feature_path: Path, results_dir: Path):
+    """Write this feature's typeName (rows) x [explanation, score] to results_dir/accuracy_scores_by_feature."""
+    explanations = json.loads(feature_path.read_text())["explanations"]
+    out_dir = results_dir / "accuracy_scores_by_feature"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (out_dir / f"{feature_path.stem}.csv").open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["typeName", "score", "explanation"])
+        for e in explanations:
+            w.writerow([e["typeName"], e["scores"][0]["value"], e["description"]])
 
