@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_delphi_record, build_pool, delphi_fuzz_scorer, generate_explanations_air, generate_explanations_neuronpedia, get_baseline, plot_feature_score_matrix, write_correlation_matrix_csv, write_explanations_matrix_csv, write_feature_score_matrix_csv
+from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, generate_explanations_air, generate_explanations_neuronpedia, get_baseline, plot_feature_score_matrix, write_correlation_matrix_csv, write_explanations_matrix_csv, write_feature_score_matrix_csv
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -225,23 +225,27 @@ def main():
     # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
     # 4. Generate correlation scores
-    print("4. Generating correlation scores...")
-    generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # print("4. Generating correlation scores...")
+    # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 5. Generate the explanation
-    # print("5. Generating explanations...")
-    # generate_explanations(
-    #     experiment_dir,
-    #     NEURONPEDIA_API_KEY,
-    #     OPENROUTER_API_KEY,
-    #     EXPLANATION_MODEL_NAME,
-    #     NEURONPEDIA_EXPLANATION_TYPES,
-    #     [c[0] for c in CHANNEL_SPECS]
-    # )
+    # 5. Generate the explanation
+    print("5. Generating explanations...")
+    generate_explanations(
+        experiment_dir,
+        NEURONPEDIA_API_KEY,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+        NEURONPEDIA_EXPLANATION_TYPES,
+        [c[0] for c in CHANNEL_SPECS]
+    )
 
-    # # 6. Postprocess the explanations
-    # print("6. Postprocessing explanations...")
-    # postprocess_explanations(experiment_dir, CHANNEL_SPECS)
+    # 5.1 Data sanity check
+    print("5.1. Checking data sanity...")
+    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
+
+    # 6. Postprocess the explanations
+    print("6. Postprocessing explanations...")
+    postprocess_explanations(experiment_dir, CHANNEL_SPECS)
 
     # # 7. Score the explanations
     # print("7. Scoring explanations...")

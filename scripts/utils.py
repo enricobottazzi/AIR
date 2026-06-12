@@ -107,6 +107,15 @@ def generate_explanations_air(experiment_dir: Path, api_key: str, model_name: st
 
     print(f"Generated {generated} AIR explanations.")
 
+def data_sanity(experiment_dir: Path, expected_types: list[str]):
+    """Assert every feature has a non-empty explanation description for each expected typeName."""
+    for feature_path in sorted(experiment_dir.glob("*.json")):
+        explanations = {e.get("typeName"): e for e in json.loads(feature_path.read_text()).get("explanations", [])}
+        missing = [t for t in expected_types if not explanations.get(t, {}).get("description")]
+        if missing:
+            raise ValueError(f"{feature_path.name}: missing explanations for {missing}")
+    print(f"Data sanity passed: all features have {len(expected_types)} explanation types.")
+
 def _example_tensors(activation: dict, ctx_len: int):
     tokens, values = activation["tokens"], activation["values"]
     if len(tokens) > ctx_len:
