@@ -259,3 +259,48 @@ def gen_feature_accuracy_scores_csv(feature_path: Path, results_dir: Path):
         for e in explanations:
             w.writerow([e["typeName"], e["scores"][0]["value"], e["description"]])
 
+def generate_protocol_json(experiment_dir: Path, results_dir: Path):
+    """Write results_dir/air.json"""
+    results_dir.mkdir(parents=True, exist_ok=True)
+    feats = [(p, json.loads(p.read_text())) for p in sorted(experiment_dir.glob("*.json"))]
+    embedders = list(next(iter(feats[0][1]["channels"].values()))["scores"])
+
+    def best_air(feat: dict, embedder: str) -> dict:
+        channels = feat["channels"]
+        channel = max(channels, key=lambda c: channels[c]["scores"][embedder])
+        correlation_score = channels[channel]["scores"][embedder]
+        def acc(type_name):
+            return next(x for x in feat["explanations"] if x["typeName"] == type_name)["scores"][0]["value"]
+        return {
+            "channel_id": channel,
+            "correlation_score": correlation_score,
+            "filtered": channel in ("positive_logits", "negative_logits") or correlation_score < 5,
+            "air_score": acc(f"air_{channel}"),
+            "postprocessed_air_score": acc(f"postprocessed_air_{channel}"),
+        }
+
+    air = {e: [{"feature_id": p.stem, **best_air(feat, e)} for p, feat in feats] for e in embedders}
+    (results_dir / "air.json").write_text(json.dumps(air, indent=2))
+
+def gen_accuracy_score_by_protocol_csv(experiment_dir: Path, results_dir: Path, neuronpedia_types: list[str], embedder_ids: list[str]):
+    """Write results_dir/accuracy_score_by_protocol.csv: feature (rows) x protocol (cols)"""
+    results_dir.mkdir(parents=True, exist_ok=True)
+    prefixes = ("air", "air_postprocessed", "air_filtered", "air_postprocessed_filtered")
+    prefix_key = {
+        "air": "air_score", "air_postprocessed": "postprocessed_air_score",
+        "air_filtered": "air_score", "air_postprocessed_filtered": "postprocessed_air_score",
+    }
+    filtered_prefixes = {"air_filtered", "air_postprocessed_filtered"}
+    air = json.loads((results_dir / "air.json").read_text())
+    lookup = {e: {x["feature_id"]: x for x in entries} for e, entries in air.items()}
+    with (results_dir / "accuracy_score_by_protocol.csv").open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["feature", *neuronpedia_types, *(f"{prefix}_{e}" for prefix in prefixes for e in embedder_ids)])
+        for p in sorted(experiment_dir.glob("*.json")):
+            by_type = {e["typeName"]: e for e in json.loads(p.read_text())["explanations"]}
+            np_scores = [by_type[t]["scores"][0]["value"] for t in neuronpedia_types]
+            air_scores = [
+                "" if (prefix in filtered_prefixes and lookup[e][p.stem]["filtered"]) else lookup[e][p.stem][prefix_key[prefix]]
+                for prefix in prefixes for e in embedder_ids
+            ]
+            w.writerow([p.stem, *np_scores, *air_scores])

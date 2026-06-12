@@ -10,7 +10,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, gen_feature_correlation_scores_csv, gen_feature_accuracy_scores_csv, generate_explanations_air, generate_explanations_neuronpedia, get_baseline
+from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, gen_accuracy_score_by_protocol_csv, gen_feature_correlation_scores_csv, gen_feature_accuracy_scores_csv, generate_explanations_air, generate_explanations_neuronpedia, generate_protocol_json, get_baseline
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
@@ -165,12 +165,14 @@ def score_explanations(
         feature_path.write_text(json.dumps(feat, indent=2))
         print(f"Scored all explanations for feature {feature_path.stem}")
 
-def aggregate_data(experiment_dir: Path):
+def aggregate_data(experiment_dir: Path, neuronpedia_types: list[str], embedders: list[str]):
     results_dir = experiment_dir / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
     for feature_path in sorted(experiment_dir.glob("*.json")):
         gen_feature_correlation_scores_csv(feature_path, results_dir)
         gen_feature_accuracy_scores_csv(feature_path, results_dir)
+    generate_protocol_json(experiment_dir, results_dir)
+    gen_accuracy_score_by_protocol_csv(experiment_dir, results_dir, neuronpedia_types, embedders)
 
 def main():
     parser = argparse.ArgumentParser(description="Unified pipeline for feature fetching, explanation generation, and scoring.")
@@ -265,7 +267,7 @@ def main():
 
     # 8. Aggregate data in csv and illustrations
     print("8. Aggregating data...")
-    aggregate_data(experiment_dir)
+    aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
     
     print("Pipeline completed.")
 
