@@ -296,6 +296,7 @@ def gen_accuracy_score_by_protocol_csv(experiment_dir: Path, results_dir: Path, 
     with (results_dir / "accuracy_score_by_protocol.csv").open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["feature", *neuronpedia_types, *(f"{prefix}_{e}" for prefix in prefixes for e in embedder_ids)])
+        rows = []
         for p in sorted(experiment_dir.glob("*.json")):
             by_type = {e["typeName"]: e for e in json.loads(p.read_text())["explanations"]}
             np_scores = [by_type[t]["scores"][0]["value"] for t in neuronpedia_types]
@@ -303,4 +304,7 @@ def gen_accuracy_score_by_protocol_csv(experiment_dir: Path, results_dir: Path, 
                 "" if (prefix in filtered_prefixes and lookup[e][p.stem]["filtered"]) else lookup[e][p.stem][prefix_key[prefix]]
                 for prefix in prefixes for e in embedder_ids
             ]
-            w.writerow([p.stem, *np_scores, *air_scores])
+            rows.append([p.stem, *np_scores, *air_scores])
+        w.writerows(rows)
+        cols = zip(*(r[1:] for r in rows))
+        w.writerow(["average", *(sum(v) / len(v) if (v := [x for x in c if x != ""]) else "" for c in cols)])
