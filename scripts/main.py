@@ -61,13 +61,16 @@ def generate_correlation_scores(experiment_dir: Path, embedder_ids: list, channe
         for feature_path in experiment_dir.glob("*.json"):
             feat = json.loads(feature_path.read_text())
             for channel_id in channel_ids:
+                channel_data = feat["channels"][channel_id]
+                if embedder_id in channel_data["scores"]:
+                    continue
+
                 baseline_path = experiment_dir / "baselines" / f"{channel_id}_{embedder_id.replace('/', '-')}_baseline.json"
                 baseline_data = json.loads(baseline_path.read_text())
                 baseline = (baseline_data["intra_mu"], baseline_data["intra_sd"], 
                             baseline_data["inter_mu"], baseline_data["inter_sd"], 
                             baseline_data["centroid"])
                 
-                channel_data = feat["channels"][channel_id]
                 score = gen_normalized_correlation_score(
                     embed(channel_data["examples"], embedder_model, embedder_id), 
                     baseline, 
@@ -77,6 +80,7 @@ def generate_correlation_scores(experiment_dir: Path, embedder_ids: list, channe
                 feat["channels"][channel_id]["scores"][embedder_id] = score
                 
             feature_path.write_text(json.dumps(feat, indent=2))
+        print(f"Generated correlation scores for embedder {embedder_id}")
 
 def generate_explanations(
     experiment_dir: Path,
@@ -86,8 +90,8 @@ def generate_explanations(
     neuronpedia_explanation_types: list[str],
     channel_ids: list[str]
 ):
-    generate_explanations_neuronpedia(experiment_dir, neuronpedia_api_key, model_name, neuronpedia_explanation_types)
     generate_explanations_air(experiment_dir, openrouter_api_key, f"google/{model_name}", channel_ids)
+    generate_explanations_neuronpedia(experiment_dir, neuronpedia_api_key, model_name, neuronpedia_explanation_types)
 
 def postprocess_explanations(experiment_dir: Path, channel_specs: list):
     air_description_prefixes = {
@@ -208,21 +212,21 @@ def main():
     N_FEATURES = 5
     MIN_NONZERO_ACTIVATIONS = 20
 
-    # 1. Sample the features
-    print("1. Sampling features...")
-    # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
+    # # 1. Sample the features
+    # print("1. Sampling features...")
+    # # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
 
-    # 2. Preprocess the features
-    print("2. Preprocessing features...")
-    preprocess_features(experiment_dir, CHANNEL_SPECS)
+    # # 2. Preprocess the features
+    # print("2. Preprocessing features...")
+    # preprocess_features(experiment_dir, CHANNEL_SPECS)
 
     # # 3. Preprocess the embedders
     # print("3. Preprocessing embedders...")
     # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 4. Generate correlation scores
-    # print("4. Generating correlation scores...")
-    # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # 4. Generate correlation scores
+    print("4. Generating correlation scores...")
+    generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
     # # 5. Generate the explanation
     # print("5. Generating explanations...")
