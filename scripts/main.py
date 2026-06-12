@@ -113,7 +113,7 @@ def postprocess_explanations(experiment_dir: Path, channel_specs: list):
             channel_id = type_name.removeprefix("air_")
             prefix = air_description_prefixes.get(channel_id)
             postprocessed_type = f"postprocessed_{type_name}"
-            if not prefix or postprocessed_type in existing_types:
+            if postprocessed_type in existing_types:
                 continue
 
             new_explanations.append({
@@ -163,6 +163,7 @@ def score_explanations(
                 "explanationScoreModelName": score_model_name
             })
         feature_path.write_text(json.dumps(feat, indent=2))
+        print(f"Scored all explanations for feature {feature_path.stem}")
 
 def aggregate_data(experiment_dir: Path, neuronpedia_explanation_types: list[str], embedder_ids: list[str]):
     write_explanations_matrix_csv(experiment_dir)
@@ -228,32 +229,40 @@ def main():
     # print("4. Generating correlation scores...")
     # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # 5. Generate the explanation
-    print("5. Generating explanations...")
-    generate_explanations(
-        experiment_dir,
-        NEURONPEDIA_API_KEY,
-        OPENROUTER_API_KEY,
-        EXPLANATION_MODEL_NAME,
-        NEURONPEDIA_EXPLANATION_TYPES,
-        [c[0] for c in CHANNEL_SPECS]
-    )
-
-    # 5.1 Data sanity check
-    print("5.1. Checking data sanity...")
-    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
-
-    # 6. Postprocess the explanations
-    print("6. Postprocessing explanations...")
-    postprocess_explanations(experiment_dir, CHANNEL_SPECS)
-
-    # # 7. Score the explanations
-    # print("7. Scoring explanations...")
-    # score_explanations(
+    # # 5. Generate the explanation
+    # print("5. Generating explanations...")
+    # generate_explanations(
     #     experiment_dir,
+    #     NEURONPEDIA_API_KEY,
     #     OPENROUTER_API_KEY,
     #     EXPLANATION_MODEL_NAME,
+    #     NEURONPEDIA_EXPLANATION_TYPES,
+    #     [c[0] for c in CHANNEL_SPECS]
     # )
+
+    # # 5.1 Data sanity check
+    # print("5.1. Checking data sanity...")
+    # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
+
+    # # 6. Postprocess the explanations
+    # print("6. Postprocessing explanations...")
+    # postprocess_explanations(experiment_dir, CHANNEL_SPECS)
+
+    # # 6.1 Data sanity check
+    # print("6.1. Checking data sanity...")
+    # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
+
+    # 7. Score the explanations
+    print("7. Scoring explanations...")
+    score_explanations(
+        experiment_dir,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+    )
+
+    # 7.1 Data sanity check
+    print("7.1. Checking data sanity...")
+    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
 
     # # 8. Aggregate data in csv and illustrations
     # print("8. Aggregating data...")
