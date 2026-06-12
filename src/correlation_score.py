@@ -23,14 +23,14 @@ def _unit(emb):
     E = np.asarray(emb, float)
     return E / np.linalg.norm(E, axis=1, keepdims=True)
 
-def _mean_pair_sim(E, w=None) -> float:
-    # Mean (optionally weighted) pairwise cosine sim over unit-normalized rows of E.
+def _mean_pair_sim(E, w) -> float:
+    # Weighted mean pairwise cosine sim over unit-normalized rows of E.
     S = E @ E.T
     i, j = np.triu_indices(len(E), k=1)
-    weights = None if w is None else np.outer(w, w)[i, j]
+    weights = np.outer(w, w)[i, j]
     return float(np.average(S[i, j], weights=weights))
 
-def gen_raw_scores(emb, pool_centroid, w=None) -> tuple[float, float]:
+def gen_raw_scores(emb, pool_centroid, w) -> tuple[float, float]:
     """Returns (intra_correlation, inter_correlation)."""
     E = _unit(emb)
     return _mean_pair_sim(E, w), float(np.average(E @ pool_centroid, weights=w))
@@ -48,7 +48,7 @@ def gen_baseline(model, pool: list[str], weights: list[float], n: int, trials: i
     intra, inter = zip(*(trial() for _ in range(trials)))
     return float(np.mean(intra)), float(np.std(intra)), float(np.mean(inter)), float(np.std(inter)), centroid.tolist()
 
-def gen_normalized_correlation_score(emb, baseline: tuple[float, float, float, float, list[float]], w=None) -> float:
+def gen_normalized_correlation_score(emb, baseline: tuple[float, float, float, float, list[float]], w) -> float:
     """Difference of Z-scores for intra and inter correlations vs a precomputed baseline."""
     intra_mu, intra_sd, inter_mu, inter_sd, centroid = baseline
     intra, inter = gen_raw_scores(emb, np.array(centroid), w)
