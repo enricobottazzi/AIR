@@ -25,22 +25,26 @@ Explain the neuron above with a word or phrase, not a complete sentence.
 """
 
 def preprocess_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[str], list[float]]:
-    # `window` is an inclusive (start, end) range of token offsets relative to
-    # maxValueTokenIndex: negative = preceding, 0 = the max token, positive = following.
-    # e.g. (0, 0) is only the top activating token.
+    # `window` is an inclusive (start, end) range of token offsets relative to maxValueTokenIndex
+    # negative = preceding, 0 = the max activation token, positive = following.
+    # e.g. (0, 0) is only the max activation token.
     start, end = window
     assert start <= end, "window start must be <= end"
     examples, weights = [], []
     for act in feature["activations"]:
         i = act["maxValueTokenIndex"]
         tokens = [act["tokens"][i + o] for o in range(start, end + 1) if 0 <= i + o < len(act["tokens"])]
-        examples.append("".join(tokens).replace("\u2581", "").strip())
-        weights.append(act["maxValue"])
+        example = "".join(tokens).replace("\u2581", " ")
+        examples.append(example.strip() or repr(example).strip("'"))
+    weights = [act["maxValue"] for act in feature["activations"]]
     return PROMPT.format(examples="\n".join(f"'{ex}'" for ex in examples)), examples, weights
 
 def preprocess_logits(feature: dict, positive: bool) -> tuple[str, list[str], list[float]]:
     # Top tokens the feature most promotes (positive) or suppresses (negative).
     key = "pos_str" if positive else "neg_str"
-    examples = [t.replace("\u2581", "").strip() for t in feature[key]]
+    examples = []
+    for t in feature[key]:
+        example = t.replace("\u2581", " ")
+        examples.append(example.strip() or repr(example).strip("'"))
     weights = feature["pos_values" if positive else "neg_values"]
     return PROMPT.format(examples="\n".join(f"'{ex}'" for ex in examples)), examples, weights

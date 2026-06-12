@@ -16,3 +16,9 @@ python scripts/main.py data/experiments/2026-06-11
 ```
 
 Where `data/experiments/2026-06-11` is the directory to store the experiment data.
+
+To view the extracted features on Neuronpedia:
+
+```bash
+python scripts/open_neuronpedia.py data/experiments/2026-06-11
+```

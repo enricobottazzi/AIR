@@ -22,7 +22,12 @@ def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, m
             continue
         req = urllib.request.Request(f"https://www.neuronpedia.org/api/feature/{model_id}/{layer}-gemmascope-2-transcoder-262k/{index}", headers={"x-api-key": api_key})
         feat = json.load(urllib.request.urlopen(req))
-        if sum(1 for a in feat.get("activations", []) if a.get("maxValue", 0) > 0) >= min_acts:
+        
+        # check if the features has at least `min_acts` activations with non-zero maxValue
+        activations = feat.get("activations", [])
+        valid_count = sum(1 for a in activations if a.get("maxValue", 0) > 0)
+        
+        if valid_count >= min_acts:
             out.write_text(json.dumps(feat, indent=2))
             saved += 1
             print(f"Saved {out.name}")
@@ -205,46 +210,46 @@ def main():
 
     # 1. Sample the features
     print("1. Sampling features...")
-    sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
+    # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
 
     # 2. Preprocess the features
     print("2. Preprocessing features...")
     preprocess_features(experiment_dir, CHANNEL_SPECS)
 
-    # 3. Preprocess the embedders
-    print("3. Preprocessing embedders...")
-    preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # # 3. Preprocess the embedders
+    # print("3. Preprocessing embedders...")
+    # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # 4. Generate correlation scores
-    print("4. Generating correlation scores...")
-    generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # # 4. Generate correlation scores
+    # print("4. Generating correlation scores...")
+    # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # 5. Generate the explanation
-    print("5. Generating explanations...")
-    generate_explanations(
-        experiment_dir,
-        NEURONPEDIA_API_KEY,
-        OPENROUTER_API_KEY,
-        EXPLANATION_MODEL_NAME,
-        NEURONPEDIA_EXPLANATION_TYPES,
-        [c[0] for c in CHANNEL_SPECS]
-    )
+    # # 5. Generate the explanation
+    # print("5. Generating explanations...")
+    # generate_explanations(
+    #     experiment_dir,
+    #     NEURONPEDIA_API_KEY,
+    #     OPENROUTER_API_KEY,
+    #     EXPLANATION_MODEL_NAME,
+    #     NEURONPEDIA_EXPLANATION_TYPES,
+    #     [c[0] for c in CHANNEL_SPECS]
+    # )
 
-    # 6. Postprocess the explanations
-    print("6. Postprocessing explanations...")
-    postprocess_explanations(experiment_dir, CHANNEL_SPECS)
+    # # 6. Postprocess the explanations
+    # print("6. Postprocessing explanations...")
+    # postprocess_explanations(experiment_dir, CHANNEL_SPECS)
 
-    # 7. Score the explanations
-    print("7. Scoring explanations...")
-    score_explanations(
-        experiment_dir,
-        OPENROUTER_API_KEY,
-        EXPLANATION_MODEL_NAME,
-    )
+    # # 7. Score the explanations
+    # print("7. Scoring explanations...")
+    # score_explanations(
+    #     experiment_dir,
+    #     OPENROUTER_API_KEY,
+    #     EXPLANATION_MODEL_NAME,
+    # )
 
-    # 8. Aggregate data in csv and illustrations
-    print("8. Aggregating data...")
-    aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
+    # # 8. Aggregate data in csv and illustrations
+    # print("8. Aggregating data...")
+    # aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
     
     print("Pipeline completed.")
 
