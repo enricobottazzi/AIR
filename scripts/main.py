@@ -14,7 +14,8 @@ from src.correlation_score import gen_normalized_correlation_score, embed
 from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, gen_accuracy_score_by_protocol_csv, gen_feature_correlation_scores_csv, gen_feature_accuracy_scores_csv, generate_explanations_air, generate_explanations_neuronpedia, generate_protocol_json, get_baseline, plot_best_protocol_summary, tabulate_accuracy_score_by_protocol
 from sentence_transformers import SentenceTransformer
 
-def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, model_id: str):
+def sample_features(experiment_dir: Path, n: int, api_key: str, model_id: str):
+    MIN_ACTS, MIN_UNIQUE_EXAMPLES = 20, 10
     saved = sum(1 for _ in experiment_dir.glob("*.json"))
     while saved < n:
         layer, index = random.randint(0, 61), random.randint(0, 262143)
@@ -23,12 +24,12 @@ def sample_features(experiment_dir: Path, n: int, min_acts: int, api_key: str, m
             continue
         req = urllib.request.Request(f"https://www.neuronpedia.org/api/feature/{model_id}/{layer}-gemmascope-2-transcoder-262k/{index}", headers={"x-api-key": api_key})
         feat = json.load(urllib.request.urlopen(req))
-        
-        # check if the features has at least `min_acts` activations with non-zero maxValue
-        activations = feat.get("activations", [])
-        valid_count = sum(1 for a in activations if a.get("maxValue", 0) > 0)
-        
-        if valid_count >= min_acts:
+
+        # keep features with >= MIN_ACTS non-zero activations and >= MIN_UNIQUE_EXAMPLES distinct examples
+        acts = [a for a in feat.get("activations", []) if a.get("maxValue", 0) > 0]
+        unique_examples = {"".join(a["tokens"]) for a in acts}
+
+        if len(acts) >= MIN_ACTS and len(unique_examples) >= MIN_UNIQUE_EXAMPLES:
             out.write_text(json.dumps(feat, indent=2))
             saved += 1
             print(f"Saved {out.name}")
@@ -217,11 +218,10 @@ def main():
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
     
     N_FEATURES = 500
-    MIN_NONZERO_ACTIVATIONS = 20
 
     # 1. Sample the features
     print("1. Sampling features...")
-    sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
+    sample_features(experiment_dir, N_FEATURES, NEURONPEDIA_API_KEY, MODEL_ID)
 
     # 2. Preprocess the features
     print("2. Preprocessing features...")
