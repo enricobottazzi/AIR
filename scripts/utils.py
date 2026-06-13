@@ -27,7 +27,7 @@ def get_baseline(experiment_dir: Path, embedder_model: SentenceTransformer, embe
     baseline_dir.mkdir(parents=True, exist_ok=True)
     out = baseline_dir / f"{channel_id}_{embedder_id.replace('/', '-')}_baseline.json"
         
-    n = 10 if "logits" in channel_id else 20
+    n = 10
     intra_mu, intra_sd, inter_mu, inter_sd, centroid = gen_baseline(embedder_model, pool, weights, n=n, trials=1000, model_id=embedder_id)
     
     out.write_text(json.dumps({

@@ -24,19 +24,33 @@ Your response should be exactly a short phrase that explains the behavior of the
 Explain the neuron above with a word or phrase, not a complete sentence.
 """
 
+def _top_unique_acts(activations: list[dict], k: int = 10) -> list[dict]:
+    # Activations arrive sorted by strength; dedupe on raw context and cap at k.
+    seen, top = set(), []
+    for act in activations:
+        context = "".join(act["tokens"])
+        if context in seen:
+            continue
+        seen.add(context)
+        top.append(act)
+        if len(top) == k:
+            break
+    return top
+
 def preprocess_acts(feature: dict, window: tuple[int, int]) -> tuple[str, list[str], list[float]]:
     # `window` is an inclusive (start, end) range of token offsets relative to maxValueTokenIndex
     # negative = preceding, 0 = the max activation token, positive = following.
     # e.g. (0, 0) is only the max activation token.
     start, end = window
     assert start <= end, "window start must be <= end"
-    examples, weights = [], []
-    for act in feature["activations"]:
+    acts = _top_unique_acts(feature["activations"])
+    examples = []
+    for act in acts:
         i = act["maxValueTokenIndex"]
         tokens = [act["tokens"][i + o] for o in range(start, end + 1) if 0 <= i + o < len(act["tokens"])]
         example = "".join(tokens).replace("\u2581", " ")
         examples.append(example.strip() or repr(example).strip("'"))
-    weights = [act["maxValue"] for act in feature["activations"]]
+    weights = [act["maxValue"] for act in acts]
     return PROMPT.format(examples="\n".join(f"'{ex}'" for ex in examples)), examples, weights
 
 def preprocess_logits(feature: dict, positive: bool) -> tuple[str, list[str], list[float]]:
