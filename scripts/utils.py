@@ -336,6 +336,26 @@ def tabulate_accuracy_score_by_protocol(csv_path: Path):
         lines = ["| protocol | accuracy |", "| --- | --- |", *body]
         (out_dir / f"accuracy_score_by_protocol_{fam}.md").write_text("\n".join(lines) + "\n")
 
+def tabulate_accuracy_score_by_protocol_inverse(csv_path: Path):
+    """Per embedder, write np/oai/air tables averaged over the features that embedder filters out (the complement of the *_filtered tables)."""
+    rows = list(csv.reader(csv_path.read_text().splitlines()))
+    header, data = rows[0], rows[1:-1]  # drop the trailing average row
+    idx = {c: i for i, c in enumerate(header)}
+    embedders = [c.removeprefix("air_filtered_") for c in header if c.startswith("air_filtered_")]
+    out_dir = csv_path.parent / "accuracy_score_by_protocol_tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def avg(col: str, subset: list) -> str:
+        v = [float(r[idx[col]]) for r in subset if r[idx[col]] != ""]
+        return f"{sum(v) / len(v):.3f}" if v else ""
+
+    for e in embedders:
+        filtered = [r for r in data if r[idx[f"air_filtered_{e}"]] == ""]  # features filtered out by embedder e
+        for fam, air_col in (("air_filtered_inverse", f"air_{e}"), ("air_postprocessed_filtered_inverse", f"air_postprocessed_{e}")):
+            body = [f"| {c} | {avg(c, filtered)} |" for c in ("np_max-act-logits", "oai_token-act-pair", air_col)]
+            lines = ["| protocol | accuracy |", "| --- | --- |", *body]
+            (out_dir / f"accuracy_score_by_{e.replace('/', '-')}_protocol_{fam}.md").write_text("\n".join(lines) + "\n")
+
 # Map each best-channel to a feature type. `short_window` (-1,1) is treated as
 # `abstract` (it is the smallest context window). Reassign to fold differently.
 CHANNEL_CATEGORY = {
