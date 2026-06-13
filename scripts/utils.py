@@ -66,10 +66,15 @@ def generate_explanations_neuronpedia(experiment_dir: Path, api_key: str, model_
                 }).encode(),
                 headers={"x-api-key": api_key, "Content-Type": "application/json"}
             )
-            explanation = json.load(urllib.request.urlopen(req))["explanation"]
-            explanation["scores"] = []
-            explanations.append(explanation)
-            generated += 1
+            try:
+                explanation = json.load(urllib.request.urlopen(req))["explanation"]
+                explanation["scores"] = []
+                explanations.append(explanation)
+                generated += 1
+            except urllib.error.HTTPError as e:
+                print(f"  Failed to generate {explanation_type}: HTTP {e.code}")
+                # We'll just continue to the next explanation type/feature
+                continue
 
         if missing_types:
             feature_path.write_text(json.dumps(feat, indent=2))
@@ -208,11 +213,12 @@ async def _run_delphi_fuzz(
     finally:
         await client.client.aclose()
 
-def _accuracy(fuzz) -> float:
-    correct = [score.correct for score in fuzz.score if score.correct is not None]
-    if not correct:
+def _accuracy(fuzz) -> tuple[float, int, int]:
+    """Return (accuracy, answered, total). Discarded = total - answered (None predictions from parse/generation failures)."""
+    answered = [score.correct for score in fuzz.score if score.correct is not None]
+    if not answered:
         raise ValueError("Delphi fuzz scorer returned no valid predictions")
-    return sum(correct) / len(correct)
+    return sum(answered) / len(answered), len(answered), len(fuzz.score)
 
 def delphi_fuzz_scorer(
     delphi_record: LatentRecord,
@@ -221,7 +227,7 @@ def delphi_fuzz_scorer(
     model_name: str,
     n_examples_shown: int = 5,
     **trace
-) -> float:
+) -> dict:
     record = copy.copy(delphi_record)
     record.explanation = explanation["description"]
     fuzz = asyncio.run(
@@ -233,7 +239,8 @@ def delphi_fuzz_scorer(
             **trace
         )
     )
-    return _accuracy(fuzz)
+    accuracy, answered, total = _accuracy(fuzz)
+    return {"value": accuracy, "answered": answered, "discarded": total - answered, "total": total}
 
 def gen_feature_correlation_scores_csv(feature_path: Path, results_dir: Path):
     """Write this feature's channel (rows) x embedder (cols) correlation scores to results_dir/correlation_scores_by_feature; mark each embedder's top channel with ' *'."""

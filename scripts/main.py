@@ -3,6 +3,7 @@ import json
 import os
 import random
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -132,16 +133,14 @@ def score_explanations(
     experiment_dir: Path,
     openrouter_api_key: str,
     model_name: str,
+    max_workers: int = 8,
 ):
     score_type_name = "delphi_fuzz"
     score_model_name = f"google/{model_name}"
-    feature_paths = sorted(experiment_dir.glob("*.json"))
-    for feature_path in feature_paths:
+
+    def score_one(feature_path: Path):
         feat = json.loads(feature_path.read_text())
-        delphi_record = build_delphi_record(
-            experiment_dir,
-            feature_path,
-        )
+        delphi_record = build_delphi_record(experiment_dir, feature_path)
         for explanation in feat.get("explanations", []):
             if any(
                 s["explanationScoreTypeName"] == score_type_name
@@ -159,12 +158,15 @@ def score_explanations(
                 typeName=explanation.get("typeName")
             )
             explanation["scores"].append({
-                "value": score,
+                **score,
                 "explanationScoreTypeName": score_type_name,
                 "explanationScoreModelName": score_model_name
             })
         feature_path.write_text(json.dumps(feat, indent=2))
         print(f"Scored all explanations for feature {feature_path.stem}")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(score_one, sorted(experiment_dir.glob("*.json"))))
 
 def aggregate_data(experiment_dir: Path, neuronpedia_types: list[str], embedders: list[str]):
     results_dir = experiment_dir / "results"
@@ -214,65 +216,65 @@ def main():
     NEURONPEDIA_API_KEY = os.environ.get("NEURONPEDIA_API_KEY", "")
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
     
-    N_FEATURES = 5
+    N_FEATURES = 500
     MIN_NONZERO_ACTIVATIONS = 20
 
-    # # 1. Sample the features
-    # print("1. Sampling features...")
-    # sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
+    # 1. Sample the features
+    print("1. Sampling features...")
+    sample_features(experiment_dir, N_FEATURES, MIN_NONZERO_ACTIVATIONS, NEURONPEDIA_API_KEY, MODEL_ID)
 
-    # # 2. Preprocess the features
-    # print("2. Preprocessing features...")
-    # preprocess_features(experiment_dir, CHANNEL_SPECS)
+    # 2. Preprocess the features
+    print("2. Preprocessing features...")
+    preprocess_features(experiment_dir, CHANNEL_SPECS)
 
-    # # 3. Preprocess the embedders
-    # print("3. Preprocessing embedders...")
-    # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # 3. Preprocess the embedders
+    print("3. Preprocessing embedders...")
+    preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 4. Generate correlation scores
-    # print("4. Generating correlation scores...")
-    # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # 4. Generate correlation scores
+    print("4. Generating correlation scores...")
+    generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 5. Generate the explanation
-    # print("5. Generating explanations...")
-    # generate_explanations(
-    #     experiment_dir,
-    #     NEURONPEDIA_API_KEY,
-    #     OPENROUTER_API_KEY,
-    #     EXPLANATION_MODEL_NAME,
-    #     NEURONPEDIA_EXPLANATION_TYPES,
-    #     [c[0] for c in CHANNEL_SPECS]
-    # )
+    # 5. Generate the explanation
+    print("5. Generating explanations...")
+    generate_explanations(
+        experiment_dir,
+        NEURONPEDIA_API_KEY,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+        NEURONPEDIA_EXPLANATION_TYPES,
+        [c[0] for c in CHANNEL_SPECS]
+    )
 
-    # # 5.1 Data sanity check
-    # print("5.1. Checking data sanity...")
-    # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
+    # 5.1 Data sanity check
+    print("5.1. Checking data sanity...")
+    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
 
-    # # 6. Postprocess the explanations
-    # print("6. Postprocessing explanations...")
-    # postprocess_explanations(experiment_dir, CHANNEL_SPECS)
+    # 6. Postprocess the explanations
+    print("6. Postprocessing explanations...")
+    postprocess_explanations(experiment_dir, CHANNEL_SPECS)
 
-    # # 6.1 Data sanity check
-    # print("6.1. Checking data sanity...")
-    # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
+    # 6.1 Data sanity check
+    print("6.1. Checking data sanity...")
+    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
 
-    # # 7. Score the explanations
-    # print("7. Scoring explanations...")
-    # score_explanations(
-    #     experiment_dir,
-    #     OPENROUTER_API_KEY,
-    #     EXPLANATION_MODEL_NAME,
-    # )
+    # 7. Score the explanations
+    print("7. Scoring explanations...")
+    score_explanations(
+        experiment_dir,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+    )
 
-    # # 7.1 Data sanity check
-    # print("7.1. Checking data sanity...")
-    # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
+    # 7.1 Data sanity check
+    print("7.1. Checking data sanity...")
+    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
 
-    # # 8. Aggregate data in csv and illustrations
-    # print("8. Aggregating data...")
-    # aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
+    # 8. Aggregate data in csv and illustrations
+    print("8. Aggregating data...")
+    aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
     
-    # print("Pipeline completed.")
+    print("Pipeline completed.")
 
 if __name__ == "__main__":
     main()
