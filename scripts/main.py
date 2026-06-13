@@ -11,7 +11,7 @@ load_dotenv()
 
 from src.explainer import preprocess_acts, preprocess_logits
 from src.correlation_score import gen_normalized_correlation_score, embed
-from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, gen_accuracy_score_by_protocol_csv, gen_feature_correlation_scores_csv, gen_feature_accuracy_scores_csv, generate_explanations_air, generate_explanations_neuronpedia, generate_protocol_json, get_baseline, plot_best_protocol_summary, tabulate_accuracy_score_by_protocol
+from utils import build_delphi_record, build_pool, data_sanity, delphi_fuzz_scorer, gen_accuracy_score_by_protocol_csv, gen_feature_correlation_scores_csv, gen_feature_accuracy_scores_csv, generate_explanations_air, generate_explanations_neuronpedia, generate_protocol_json, get_baseline, plot_best_protocol_summary, plot_feature_type_area, tabulate_accuracy_score_by_protocol
 from sentence_transformers import SentenceTransformer
 
 def sample_features(experiment_dir: Path, n: int, api_key: str, model_id: str):
@@ -179,6 +179,7 @@ def aggregate_data(experiment_dir: Path, neuronpedia_types: list[str], embedders
     gen_accuracy_score_by_protocol_csv(experiment_dir, results_dir, neuronpedia_types, embedders)
     tabulate_accuracy_score_by_protocol(results_dir / "accuracy_score_by_protocol.csv")
     plot_best_protocol_summary(results_dir / "accuracy_score_by_protocol.csv")
+    plot_feature_type_area(results_dir)
 
 def main():
     parser = argparse.ArgumentParser(description="Unified pipeline for feature fetching, explanation generation, and scoring.")

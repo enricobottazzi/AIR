@@ -336,6 +336,61 @@ def tabulate_accuracy_score_by_protocol(csv_path: Path):
         lines = ["| protocol | accuracy |", "| --- | --- |", *body]
         (out_dir / f"accuracy_score_by_protocol_{fam}.md").write_text("\n".join(lines) + "\n")
 
+# Map each best-channel to a feature type. `short_window` (-1,1) is treated as
+# `abstract` (it is the smallest context window). Reassign to fold differently.
+CHANNEL_CATEGORY = {
+    "act_token": "input", "before_act_token": "input",
+    "after_act_token": "output", "positive_logits": "output", "negative_logits": "output",
+    "medium_window": "abstract", "long_window": "abstract", "short_window": "abstract",
+}
+FEATURE_CATEGORIES = ["input", "output", "abstract", "obscure"]
+CATEGORY_COLORS = {"input": "tab:blue", "output": "tab:orange", "abstract": "tab:green", "obscure": "tab:gray"}
+OBSCURE_THRESHOLD = 5.0  # best correlation score below this => obscure
+
+_feature_layer = lambda rec: int(rec["feature_id"].split("_")[-2])
+_feature_category = lambda rec: "obscure" if rec["correlation_score"] < OBSCURE_THRESHOLD else CHANNEL_CATEGORY[rec["channel_id"]]
+
+def _binned_counts(records: list, group_size: int):
+    """Return (groups, {category: [count per group]}) for one embedder, binning layers by layer // group_size."""
+    groups = sorted({_feature_layer(r) // group_size for r in records})
+    idx = {g: i for i, g in enumerate(groups)}
+    counts = {c: [0] * len(groups) for c in FEATURE_CATEGORIES}
+    for r in records:
+        counts[_feature_category(r)][idx[_feature_layer(r) // group_size]] += 1
+    return groups, counts
+
+def _to_fractions(counts: dict, n: int):
+    """Column-normalize counts so each layer group sums to 1 (empty groups => 0)."""
+    totals = [sum(counts[c][i] for c in FEATURE_CATEGORIES) or 1 for i in range(n)]
+    return {c: [counts[c][i] / totals[i] for i in range(n)] for c in FEATURE_CATEGORIES}
+
+def _group_centers(groups, gs): return [g * gs + (gs - 1) / 2 for g in groups]
+
+def _new_ax(figsize=(10, 5)):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    return plt, *plt.subplots(figsize=figsize)
+
+def plot_feature_type_area(results_dir: Path, group_size: int = 2):
+    """100%-stacked area per embedder: feature-type composition vs layer depth."""
+    air = json.loads((results_dir / "air.json").read_text())
+    out_dir = results_dir / "feature_type_area"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for embedder, records in air.items():
+        groups, counts = _binned_counts(records, group_size)
+        fr, x = _to_fractions(counts, len(groups)), _group_centers(groups, group_size)
+        plt, fig, ax = _new_ax()
+        ax.stackplot(x, [fr[c] for c in FEATURE_CATEGORIES], labels=FEATURE_CATEGORIES, colors=[CATEGORY_COLORS[c] for c in FEATURE_CATEGORIES])
+        ax.set_xlim(min(x), max(x))
+        ax.set_ylim(0, 1)
+        ax.set_xlabel("layer")
+        ax.set_ylabel("fraction of features")
+        ax.set_title(f"feature type composition vs layer — {embedder}")
+        ax.legend(loc="upper center", ncol=len(FEATURE_CATEGORIES), fontsize=8)
+        fig.savefig(out_dir / f"{embedder.replace('/', '-')}.png", bbox_inches="tight")
+        plt.close(fig)
+
 def plot_best_protocol_summary(csv_path: Path):
     """PNG bar chart: neuronpedia protocols + each air family's best score across embedders, annotated with the chosen embedder."""
     import matplotlib
