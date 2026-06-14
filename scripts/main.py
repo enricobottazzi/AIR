@@ -221,21 +221,21 @@ def main():
     
     N_FEATURES = 500
 
-    # # 1. Sample the features
-    # print("1. Sampling features...")
-    # sample_features(experiment_dir, N_FEATURES, NEURONPEDIA_API_KEY, MODEL_ID)
+    # 1. Sample the features
+    print("1. Sampling features...")
+    sample_features(experiment_dir, N_FEATURES, NEURONPEDIA_API_KEY, MODEL_ID)
 
-    # # 2. Preprocess the features
-    # print("2. Preprocessing features...")
-    # preprocess_features(experiment_dir, CHANNEL_SPECS)
+    # 2. Preprocess the features
+    print("2. Preprocessing features...")
+    preprocess_features(experiment_dir, CHANNEL_SPECS)
 
-    # # 3. Preprocess the embedders
-    # print("3. Preprocessing embedders...")
-    # preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # 3. Preprocess the embedders
+    print("3. Preprocessing embedders...")
+    preprocess_embedders(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
-    # # 4. Generate correlation scores
-    # print("4. Generating correlation scores...")
-    # generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
+    # 4. Generate correlation scores
+    print("4. Generating correlation scores...")
+    generate_correlation_scores(experiment_dir, EMBEDDERS, [c[0] for c in CHANNEL_SPECS])
 
     # 5. Generate the explanation
     print("5. Generating explanations...")
@@ -260,23 +260,23 @@ def main():
     print("6.1. Checking data sanity...")
     data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES)
 
-    # # 7. Score the explanations
-    # print("7. Scoring explanations...")
-    # score_explanations(
-    #     experiment_dir,
-    #     OPENROUTER_API_KEY,
-    #     EXPLANATION_MODEL_NAME,
-    # )
+    # 7. Score the explanations
+    print("7. Scoring explanations...")
+    score_explanations(
+        experiment_dir,
+        OPENROUTER_API_KEY,
+        EXPLANATION_MODEL_NAME,
+    )
 
-    # # 7.1 Data sanity check
-    # print("7.1. Checking data sanity...")
-    # data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
+    # 7.1 Data sanity check
+    print("7.1. Checking data sanity...")
+    data_sanity(experiment_dir, [f"air_{c[0]}" for c in CHANNEL_SPECS] + [f"postprocessed_air_{c[0]}" for c in CHANNEL_SPECS] + NEURONPEDIA_EXPLANATION_TYPES, require_scores=True)
 
-    # # 8. Aggregate data in csv and illustrations
-    # print("8. Aggregating data...")
-    # aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
+    # 8. Aggregate data in csv and illustrations
+    print("8. Aggregating data...")
+    aggregate_data(experiment_dir, NEURONPEDIA_EXPLANATION_TYPES, EMBEDDERS)
     
-    # print("Pipeline completed.")
+    print("Pipeline completed.")
 
 if __name__ == "__main__":
     main()
