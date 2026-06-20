@@ -40,7 +40,7 @@
   \ex{they all \tok{love} her dearly}\\[3pt]
   \ex{we \tok{love} spending our time}\\
   \end{tabular}};
-\node[title, above=2pt of feat] {Feature activation examples};
+\node[title, above=2pt of feat] {Feature \#123 activation examples};
 
 % ---------------- 1. Identify Category ----------------
 \node[fn, right=16mm of feat] (router) {1.\\Identify\\Category};
@@ -50,7 +50,7 @@
 % input is solid and continues the pipeline; the others are dotted alternatives.
 \draw[darr, outputc]   (router.32) -- ++(2.15,1.30) node[route, text=outputc,   pos=0.64]{output};
 \draw[darr, abstractc] (router.54) -- ++(1.35,1.95) node[route, text=abstractc, pos=0.64]{abstract};
-\draw[darr, obscurec]  (router.76) -- ++(0.55,2.45) node[route, text=obscurec,  pos=0.68]{obscure};
+%\draw[darr, obscurec]  (router.76) -- ++(0.55,2.45) node[route, text=obscurec,  pos=0.68]{obscure};
 
 % ---------------- Trimmed examples (input route) ----------------
 \node[box, right=38mm of router] (trim) {%
@@ -68,7 +68,7 @@
 
 % ---------------- Explanation (output) ----------------
 \node[box, draw=inputc, fill=inputc!8, right=16mm of interp] (expl) {\large\bfseries ``love''};
-\node[title, above=2pt of expl] {Explanation};
+\node[title, above=2pt of expl] {Feature \#123 explanation};
 \draw[arr] (interp.east) -- (expl.west);
 
 \end{tikzpicture}
